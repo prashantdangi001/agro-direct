@@ -2,21 +2,29 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { useCart } from '@/context/CartContext';
 
 export default function PriceSummaryCard() {
   const router = useRouter();
+  const { getCartTotal, cart } = useCart();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  // Dynamic Math Logic
+  const subtotal = getCartTotal();
+  const deliveryFee = subtotal > 0 ? 500.00 : 0; // Flat KES 500 delivery fee
+  const taxes = subtotal * 0.16; // 16% standard VAT
+  const finalTotal = subtotal + deliveryFee + taxes;
+
   const handlePlaceOrder = async () => {
+    if (cart.length === 0) return;
     setLoading(true);
 
-    // 1. Send the order to Supabase
     const { error } = await supabase
       .from('orders')
       .insert([
         {
-          total_amount: 145.22,
+          total_amount: finalTotal,
           status: 'Processing',
           payment_method: 'M-Pesa / Escrow',
           delivery_address: 'Central Logistics Hub, Nairobi, Kenya'
@@ -28,17 +36,13 @@ export default function PriceSummaryCard() {
       alert('Failed to process order. Please try again.');
       setLoading(false);
     } else {
-      // 2. Trigger the Success UI
       setSuccess(true);
-      
-      // 3. Send them back to the marketplace after 3 seconds
       setTimeout(() => {
         router.push('/marketplace');
       }, 4000);
     }
   };
 
-  // SUCCESS STATE UI (Renders when the order goes through)
   if (success) {
     return (
       <div className="bg-primary-container text-on-primary-container p-8 rounded-xl border border-primary/20 elevation-1 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500 h-full min-h-[400px]">
@@ -53,7 +57,6 @@ export default function PriceSummaryCard() {
     );
   }
 
-  // DEFAULT CHECKOUT UI
   return (
     <div className="space-y-6">
       <section className="bg-surface-container-high p-6 rounded-lg border border-outline-variant elevation-1">
@@ -62,29 +65,29 @@ export default function PriceSummaryCard() {
         <div className="space-y-4">
           <div className="flex justify-between text-on-surface-variant font-medium">
             <span>Subtotal</span>
-            <span>$124.50</span>
+            <span>KES {subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-on-surface-variant font-medium">
             <span>Delivery Fee</span>
-            <span>$12.00</span>
+            <span>KES {deliveryFee.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-on-surface-variant font-medium">
-            <span>Taxes (VAT)</span>
-            <span>$8.72</span>
+            <span>Taxes (16% VAT)</span>
+            <span>KES {taxes.toFixed(2)}</span>
           </div>
           
           <div className="pt-4 border-t border-outline-variant">
             <div className="flex justify-between items-baseline">
               <span className="font-bold text-lg text-on-surface">Total</span>
-              <span className="text-3xl font-bold text-primary">$145.22</span>
+              <span className="text-2xl md:text-3xl font-bold text-primary">KES {finalTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
         <button 
           onClick={handlePlaceOrder}
-          disabled={loading}
-          className="w-full mt-8 py-4 bg-[#fe932c] text-white font-bold text-lg rounded-lg shadow-sm hover:bg-[#d97706] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+          disabled={loading || cart.length === 0}
+          className="w-full mt-8 py-4 bg-[#fe932c] text-white font-bold text-lg rounded-lg shadow-sm hover:bg-[#d97706] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
@@ -104,7 +107,6 @@ export default function PriceSummaryCard() {
         </p>
       </section>
 
-      {/* Trust Badge */}
       <div className="flex items-center gap-3 p-4 bg-primary-container/10 border border-primary/20 rounded-lg">
         <span className="material-symbols-outlined text-primary filled-icon text-[32px]">verified_user</span>
         <div>

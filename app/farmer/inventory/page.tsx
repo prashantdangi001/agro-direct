@@ -1,6 +1,7 @@
 import FarmerNavbar from "@/components/layout/FarmerNavbar";
 import FarmerSidebar from "@/components/layout/FarmerSidebar";
 import InventoryTable from "@/components/farmer/InventoryTable";
+import Link from "next/link";
 
 export default function InventoryManagementPage() {
   return (
@@ -19,11 +20,14 @@ export default function InventoryManagementPage() {
               <p className="text-on-surface-variant">Track your stock levels, update pricing, and manage active marketplace listings.</p>
             </div>
             
-            {/* Primary Action Button */}
-            <button className="bg-primary hover:bg-primary-container text-white px-6 py-3 rounded-lg font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2">
+            {/* THE FIX: Wrapped the button in a Next.js Link */}
+            <Link 
+              href="/farmer/add-listing" 
+              className="bg-primary hover:bg-primary-container text-white px-6 py-3 rounded-lg font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2"
+            >
               <span className="material-symbols-outlined">add</span>
               Add New Produce
-            </button>
+            </Link>
           </div>
 
           {/* Data Table Component */}
