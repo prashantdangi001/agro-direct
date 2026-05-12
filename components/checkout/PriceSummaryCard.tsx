@@ -12,7 +12,7 @@ export default function PriceSummaryCard() {
 
   // Dynamic Math Logic
   const subtotal = getCartTotal();
-  const deliveryFee = subtotal > 0 ? 500.00 : 0; // Flat KES 500 delivery fee
+  const deliveryFee = subtotal > 0 ? 500.00 : 0; // Flat INR 500 delivery fee
   const taxes = subtotal * 0.16; // 16% standard VAT
   const finalTotal = subtotal + deliveryFee + taxes;
 
@@ -65,21 +65,21 @@ export default function PriceSummaryCard() {
         <div className="space-y-4">
           <div className="flex justify-between text-on-surface-variant font-medium">
             <span>Subtotal</span>
-            <span>KES {subtotal.toFixed(2)}</span>
+            <span>INR {subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-on-surface-variant font-medium">
             <span>Delivery Fee</span>
-            <span>KES {deliveryFee.toFixed(2)}</span>
+            <span>INR {deliveryFee.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-on-surface-variant font-medium">
             <span>Taxes (16% VAT)</span>
-            <span>KES {taxes.toFixed(2)}</span>
+            <span>INR {taxes.toFixed(2)}</span>
           </div>
           
           <div className="pt-4 border-t border-outline-variant">
             <div className="flex justify-between items-baseline">
               <span className="font-bold text-lg text-on-surface">Total</span>
-              <span className="text-2xl md:text-3xl font-bold text-primary">KES {finalTotal.toFixed(2)}</span>
+              <span className="text-2xl md:text-3xl font-bold text-primary">INR {finalTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>

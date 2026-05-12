@@ -112,7 +112,7 @@ export default function OrderHistoryTable() {
                       <p className="text-xs text-on-surface-variant">{order.payment_method}</p>
                     </td>
                     <td className="py-4 px-6 text-sm font-bold text-primary">
-                      KES {order.total_amount.toFixed(2)}
+                      INR {order.total_amount.toFixed(2)}
                     </td>
                     
                     {/* UPDATED STATUS BADGES */}

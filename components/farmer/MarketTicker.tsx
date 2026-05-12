@@ -1,8 +1,8 @@
 export default function MarketTicker() {
   const rates = [
-    { name: "Maize", price: "KES 4,200/bag", up: true, change: "2%" },
-    { name: "Onions", price: "KES 95/kg", up: false, change: "1%" },
-    { name: "Potatoes", price: "KES 3,800/bag", up: true, change: "5%" },
+    { name: "Maize", price: "INR 4,200/bag", up: true, change: "2%" },
+    { name: "Onions", price: "INR 95/kg", up: false, change: "1%" },
+    { name: "Potatoes", price: "INR 3,800/bag", up: true, change: "5%" },
   ];
 
   return (

@@ -67,8 +67,8 @@ export default function OrderReviewCard() {
             </div>
 
             <div className="text-left sm:text-right mt-2 sm:mt-0">
-              <span className="font-bold text-primary text-lg block">KES {(item.price * item.qty).toFixed(2)}</span>
-              <span className="text-xs text-on-surface-variant font-medium">KES {item.price.toFixed(2)} each</span>
+              <span className="font-bold text-primary text-lg block">INR {(item.price * item.qty).toFixed(2)}</span>
+              <span className="text-xs text-on-surface-variant font-medium">INR {item.price.toFixed(2)} each</span>
             </div>
           </div>
         ))}

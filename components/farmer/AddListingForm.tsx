@@ -120,7 +120,7 @@ export default function AddListingForm() {
             <div>
               <label className="block text-sm font-bold text-on-surface mb-2">Price per unit</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-sm">KES</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-sm">INR</span>
                 <input type="number" required step="0.01" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} placeholder="0.00" className="w-full h-12 pl-16 pr-4 rounded-lg border border-outline-variant focus:border-primary outline-none" />
               </div>
             </div>

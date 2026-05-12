@@ -171,7 +171,7 @@ export default function InventoryTable() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-on-surface mb-2">Price (KES)</label>
+                  <label className="block text-sm font-bold text-on-surface mb-2">Price (INR)</label>
                   <input type="number" step="0.01" required value={editPrice} onChange={(e) => setEditPrice(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-outline-variant focus:border-primary outline-none" />
                 </div>
                 <div>
@@ -252,7 +252,7 @@ export default function InventoryTable() {
                       </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-on-surface-variant">{item.category}</td>
-                    <td className="py-4 px-6 text-sm font-bold text-on-surface">KES {item.price.toFixed(2)}</td>
+                    <td className="py-4 px-6 text-sm font-bold text-on-surface">INR {item.price.toFixed(2)}</td>
                     <td className="py-4 px-6 text-sm text-on-surface-variant font-medium">{item.stock} {item.unit}</td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${

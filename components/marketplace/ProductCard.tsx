@@ -16,7 +16,7 @@ export default function ProductCard({ id = "temp-id", name, farm, price, unit, t
   const { addToCart } = useCart();
   const [added, setAdded] = useState(false);
 
-  // Extract the numeric value from the price string (e.g., "KES 150.00" -> 150)
+  // Extract the numeric value from the price string (e.g., "INR 150.00" -> 150)
   const numericPrice = parseFloat(price.replace(/[^\d.]/g, '')) || 0;
 
   const handleAddToCart = () => {
