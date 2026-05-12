@@ -12,6 +12,7 @@ interface ProductPurchaseProps {
     stock: number;
     image: string;
     farm: string;
+    farmerId: string; // <-- ADDED FOR ISOLATION
   };
 }
 
@@ -44,7 +45,8 @@ export default function ProductPurchaseCard({ product }: ProductPurchaseProps) {
       price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
       qty: quantity,
       image: product.image,
-      farm: product.farm
+      farm: product.farm,
+      farmerId: product.farmerId // <-- PASSING IT TO THE CART
     });
 
     // Show a quick success animation
@@ -60,7 +62,8 @@ export default function ProductPurchaseCard({ product }: ProductPurchaseProps) {
       price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
       qty: quantity,
       image: product.image,
-      farm: product.farm
+      farm: product.farm,
+      farmerId: product.farmerId // <-- PASSING IT TO THE CART
     });
     router.push('/checkout');
   };
@@ -74,7 +77,7 @@ export default function ProductPurchaseCard({ product }: ProductPurchaseProps) {
       {/* Price Header */}
       <div className="mb-6">
         <div className="flex items-end gap-2 mb-1">
-          <span className="text-4xl font-bold text-primary tracking-tight">INR {numericPrice.toFixed(2)}</span>
+          <span className="text-4xl font-bold text-primary tracking-tight">KES {numericPrice.toFixed(2)}</span>
           <span className="text-on-surface-variant font-medium mb-1">/ {product.unit}</span>
         </div>
         <p className={`text-sm font-bold mt-2 ${product.stock > 10 ? 'text-[#006c4a]' : 'text-[#904d00]'}`}>

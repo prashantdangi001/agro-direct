@@ -113,7 +113,7 @@ export default function ProductGrid() {
             id={product.id}
             name={product.name}
             farm={showFollowedBadge ? "Green Valley Farm" : "AgroDirect Verified Farm"} 
-            price={`KES ${product.price.toFixed(2)}`}
+            price={`INR ${product.price.toFixed(2)}`}
             unit={product.unit}
             tag={showFollowedBadge ? '★ Followed Farm' : product.stock > 10 ? 'Verified' : product.stock > 0 ? 'Low Stock' : 'Out of Stock'}
             image={product.image_url || "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?q=80&w=600&auto=format&fit=crop"} 

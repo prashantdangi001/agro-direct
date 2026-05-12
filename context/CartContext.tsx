@@ -8,6 +8,7 @@ export type CartItem = {
   qty: number;
   image: string;
   farm: string;
+  farmerId: string; // Added for isolation
 };
 
 interface CartContextType {
@@ -15,6 +16,7 @@ interface CartContextType {
   addToCart: (item: CartItem) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
+  clearCart: () => void;
   getCartTotal: () => number;
   getCartCount: () => number;
 }
@@ -26,20 +28,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = (newItem: CartItem) => {
     setCart((prevCart) => {
-      // Check if the item is already in the cart
       const existingItem = prevCart.find((item) => item.id === newItem.id);
-      
-      // Use the quantity passed from the component, or default to 1
       const quantityToAdd = newItem.qty || 1;
 
       if (existingItem) {
-        // If it exists, add the NEW quantity to the EXISTING quantity
         return prevCart.map((item) =>
           item.id === newItem.id ? { ...item, qty: item.qty + quantityToAdd } : item
         );
       }
-      
-      // If it's a brand new item, add it with the requested quantity
       return [...prevCart, { ...newItem, qty: quantityToAdd }];
     });
   };
@@ -58,16 +54,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const getCartTotal = () => {
-    return cart.reduce((total, item) => total + item.price * item.qty, 0);
-  };
+  const clearCart = () => setCart([]);
 
-  const getCartCount = () => {
-    return cart.reduce((count, item) => count + item.qty, 0);
-  };
+  const getCartTotal = () => cart.reduce((total, item) => total + item.price * item.qty, 0);
+  const getCartCount = () => cart.reduce((count, item) => count + item.qty, 0);
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, getCartTotal, getCartCount }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, getCartTotal, getCartCount }}>
       {children}
     </CartContext.Provider>
   );
@@ -75,8 +68,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
+  if (context === undefined) throw new Error('useCart must be used within a CartProvider');
   return context;
 }

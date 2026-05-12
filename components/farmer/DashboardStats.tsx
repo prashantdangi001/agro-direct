@@ -3,38 +3,51 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export default function DashboardStats() {
-  const [stats, setStats] = useState({ products: 0, orders: 0, revenue: 0 });
+  const [stats, setStats] = useState({ products: 0, orders: 0, revenue: 0, views: 0 });
 
   useEffect(() => {
     async function fetchDashboardData() {
-      // Fetch total products
-      const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true });
-      
-      // Fetch total orders & revenue
-      const { data: orderData } = await supabase.from('orders').select('total_amount');
-      
-      const totalRevenue = orderData?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const [profileRes, productRes, orderRes] = await Promise.all([
+        supabase.from('farm_profiles').select('profile_views').eq('id', user.id).single(),
+        supabase.from('products').select('*', { count: 'exact', head: true }).eq('farmer_id', user.id),
+        supabase.from('orders').select('total_amount, status').eq('farmer_id', user.id)
+      ]);
+
+      const totalRevenue = orderRes.data?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+      const pendingOrdersCount = orderRes.data?.filter(order => order.status !== 'Delivered').length || 0;
       
       setStats({
-        products: productCount || 0,
-        orders: orderData?.length || 0,
-        revenue: totalRevenue
+        products: productRes.count || 0,
+        orders: pendingOrdersCount,
+        revenue: totalRevenue,
+        views: profileRes.data?.profile_views || 0 
       });
     }
+
     fetchDashboardData();
+
+    const channel = supabase.channel('stats-isolation')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_profiles' }, () => fetchDashboardData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const statCards = [
-    { title: "Total Revenue", value: `INR ${stats.revenue.toFixed(2)}`, trend: "+12.5%", isUp: true, icon: "payments" },
-    { title: "Active Listings", value: stats.products.toString(), trend: "+2", isUp: true, icon: "inventory_2" },
-    { title: "Pending Orders", value: stats.orders.toString(), trend: "Needs Action", isUp: false, icon: "local_shipping", isAlert: true },
-    { title: "Profile Views", value: "1,204", trend: "+18%", isUp: true, icon: "visibility" }
+    { title: "Total Revenue", value: `KES ${stats.revenue.toFixed(2)}`, trend: "+12.5%", isUp: true, icon: "payments", isAlert: false },
+    { title: "Active Listings", value: stats.products.toString(), trend: "+2", isUp: true, icon: "inventory_2", isAlert: false },
+    { title: "Pending Orders", value: stats.orders.toString(), trend: stats.orders > 0 ? "Action Required" : "Cleared", isUp: stats.orders === 0, icon: "local_shipping", isAlert: stats.orders > 0 },
+    { title: "Profile Views", value: stats.views.toLocaleString(), trend: "Live", isUp: true, icon: "visibility", isAlert: false }
   ];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {statCards.map((stat, i) => (
-        <div key={i} className="bg-white p-6 rounded-lg border border-outline-variant elevation-1 transition-all hover:shadow-md">
+        <div key={i} className="bg-white p-6 rounded-lg border border-outline-variant elevation-1">
           <div className="flex justify-between items-start mb-4">
             <div className={`p-3 rounded-lg ${stat.isAlert ? 'bg-[#fe932c]/10 text-[#904d00]' : 'bg-primary-container/10 text-primary'}`}>
               <span className="material-symbols-outlined">{stat.icon}</span>
@@ -43,7 +56,7 @@ export default function DashboardStats() {
               {stat.trend}
             </span>
           </div>
-          <p className="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-1">{stat.title}</p>
+          <p className="text-sm font-bold text-on-surface-variant uppercase mb-1">{stat.title}</p>
           <h3 className="text-3xl font-bold text-on-surface tracking-tight">{stat.value}</h3>
         </div>
       ))}

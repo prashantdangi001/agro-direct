@@ -8,11 +8,34 @@ import TraceabilityTimeline from '@/components/product/TraceabilityTimeline';
 import NutritionalInfo from '@/components/product/NutritionalInfo';
 import FarmerSnippet from '@/components/product/FarmerSnippet';
 import Link from 'next/link';
+import BackButton from '@/components/ui/BackButton';
 
 export default function ProductDetailsPage() {
   const params = useParams();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // ... (keep your existing state variables)
+
+  // NEW: Add this block to increment views when someone visits!
+  useEffect(() => {
+    const recordView = async () => {
+      // 1. Get the current view count
+      const { data } = await supabase.from('farm_profiles').select('profile_views').eq('id', 'demo-farm').single();
+      
+      if (data) {
+        // 2. Add 1 and save it back to the database
+        await supabase
+          .from('farm_profiles')
+          .update({ profile_views: data.profile_views + 1 })
+          .eq('id', 'demo-farm');
+      }
+    };
+
+    recordView();
+  }, []); // Empty array ensures this only happens ONCE when the page loads
+
+  // ... (keep your existing fetchData and Realtime useEffect exactly as it is)
 
   useEffect(() => {
     async function fetchProduct() {
@@ -58,10 +81,14 @@ export default function ProductDetailsPage() {
   }
 
   return (
+    
+    
     <div className="bg-background min-h-screen flex flex-col">
       <MarketplaceNavbar />
 
       <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 md:px-12 py-8">
+        {/* 2. DROP THE BACK BUTTON HERE */}
+        <BackButton label="Back to Marketplace" />
         
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center gap-2 text-sm text-on-surface-variant font-medium mb-8">
@@ -74,7 +101,7 @@ export default function ProductDetailsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
           
-          {/* Left Column: Image & Details (Takes up 2/3 of space) */}
+          {/* Left Column: Image & Details (TaINR up 2/3 of space) */}
           <div className="lg:col-span-2 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
             {/* Hero Image */}
@@ -103,14 +130,14 @@ export default function ProductDetailsPage() {
                   <p className="text-xs font-bold text-primary uppercase tracking-widest">Blockchain Verified</p>
                 </div>
               </div>
-              <TraceabilityTimeline date={new Date(product.created_at).toLocaleDateString()} />
+              <TraceabilityTimeline />
             </section>
 
             {/* Nutritional & Quality Info */}
-            <NutritionalInfo category={product.category} />
+            <NutritionalInfo />
           </div>
 
-          {/* Right Column: Checkout & Farmer Profile (Takes up 1/3 of space) */}
+          {/* Right Column: Checkout & Farmer Profile (TaINR up 1/3 of space) */}
           <div className="space-y-6 relative">
             <div className="sticky top-28 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500 delay-150">
               
@@ -123,7 +150,8 @@ export default function ProductDetailsPage() {
                   unit: product.unit,
                   stock: product.stock,
                   image: product.image_url,
-                  farm: "Green Valley Farm"
+                  farm: "Green Valley Farm",
+                  farmerId: product.farmer_id || ""
                 }} 
               />
 

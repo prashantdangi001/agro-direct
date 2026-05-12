@@ -17,10 +17,23 @@ export default function ProfileSettingsForm() {
   const [about, setAbout] = useState('');
   const [practices, setPractices] = useState('');
 
-  // 1. Fetch data on load
+  // 1. Fetch data on load (DYNAMIC AUTH)
   useEffect(() => {
     async function loadProfile() {
-      const { data, error } = await supabase.from('farm_profiles').select('*').eq('id', 'demo-farm').single();
+      // Get the actual logged-in user!
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        setFetching(false);
+        return; // If not logged in, stop here
+      }
+
+      // Fetch THEIR specific profile
+      const { data, error } = await supabase
+        .from('farm_profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
       if (data) {
         setFarmName(data.farm_name || '');
         setLocation(data.location || '');
@@ -48,10 +61,18 @@ export default function ProfileSettingsForm() {
     }
   };
 
-  // 2. Save everything back to Supabase
+  // 2. Save everything back to Supabase (UPSERT)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Get the user ID again for saving
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      alert("You must be logged in to save settings.");
+      setLoading(false);
+      return;
+    }
     
     let finalProfileUrl = profilePicPreview;
     let finalCoverUrl = coverPhotoPreview;
@@ -75,22 +96,24 @@ export default function ProfileSettingsForm() {
       if (url) finalCoverUrl = url;
     }
 
+    // USE UPSERT: This creates a new row if they are new, or updates if they exist!
     const { error } = await supabase
       .from('farm_profiles')
-      .update({
+      .upsert({
+        id: authData.user.id, // Tie the profile to their actual auth ID!
         farm_name: farmName,
         location: location,
         about: about,
         practices: practices,
         profile_pic_url: finalProfileUrl,
         cover_photo_url: finalCoverUrl
-      })
-      .eq('id', 'demo-farm');
+      });
 
     if (!error) {
       setMessage({ text: 'Settings updated successfully!', type: 'success' });
     } else {
       setMessage({ text: 'Failed to update settings.', type: 'error' });
+      console.error(error);
     }
     
     setLoading(false);

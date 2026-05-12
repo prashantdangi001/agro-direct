@@ -20,7 +20,10 @@ export default function ProductCard({ id, name, farm, price, unit, tag, image }:
   const numericPrice = parseFloat(price.replace(/[^\d.]/g, '')) || 0;
 
   const handleAddToCart = () => {
-    addToCart({ id, name, price: numericPrice, qty: 1, image, farm });
+    addToCart({
+      id, name, price: numericPrice, qty: 1, image, farm,
+      farmerId: ''
+    });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   };
