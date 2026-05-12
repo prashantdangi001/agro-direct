@@ -33,7 +33,7 @@ export default function ProducerSidebar() {
         
         <div className="flex items-center gap-3 mb-3 relative z-10">
           <span className="material-symbols-outlined text-primary filled-icon text-2xl">verified_user</span>
-          <h4 className="font-bold text-primary text-lg">AgroDirect Verified</h4>
+          <h4 className="font-bold text-primary text-lg">Khetify Verified</h4>
         </div>
         
         <p className="text-sm text-on-surface-variant mb-5 relative z-10 leading-relaxed font-medium">

@@ -2,7 +2,7 @@ export default function AdminSidebar() {
   return (
     <aside className="hidden md:flex flex-col w-64 bg-surface-container-lowest border-r border-outline-variant h-screen sticky top-0 z-20">
       <div className="px-6 py-8">
-        <span className="text-2xl font-bold text-primary tracking-tight">AgroDirect</span>
+        <span className="text-2xl font-bold text-primary tracking-tight">Khetify</span>
         <p className="text-sm font-semibold text-outline mt-1">Admin Console</p>
       </div>
       

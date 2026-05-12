@@ -11,7 +11,7 @@ export default function RegisterPage() {
 
       {/* Minimal Header (No nav links during checkout/auth flows) */}
       <header className="w-full h-16 flex items-center px-4 md:px-12 max-w-[1280px] mx-auto relative z-10">
-        <Link href="/" className="text-2xl font-bold text-primary tracking-tight">AgroDirect</Link>
+        <Link href="/" className="text-2xl font-bold text-primary tracking-tight">Khetify</Link>
       </header>
 
       <main className="flex-grow flex items-center justify-center py-12 px-4 relative z-10">

@@ -17,7 +17,7 @@ export default function LoginPage() {
         
         <div className="relative z-10 p-12 flex flex-col justify-end h-full text-white">
           <Link href="/" className="inline-block">
-            <h1 className="text-5xl font-bold mb-4 tracking-tight hover:opacity-90 transition-opacity">AgroDirect</h1>
+            <h1 className="text-5xl font-bold mb-4 tracking-tight hover:opacity-90 transition-opacity">Khetify</h1>
           </Link>
           <p className="text-lg max-w-md opacity-90 leading-relaxed font-medium">
             Connecting tech-forward farmers with the regional marketplace. Efficient, grounded, and revitalizing commerce for the modern agricultural world.
@@ -30,7 +30,7 @@ export default function LoginPage() {
         
         {/* Brand Logo for Mobile (Hidden on Desktop) */}
         <div className="absolute top-8 left-8 lg:hidden">
-          <Link href="/" className="text-2xl font-bold text-primary tracking-tight">AgroDirect</Link>
+          <Link href="/" className="text-2xl font-bold text-primary tracking-tight">Khetify</Link>
         </div>
 
         {/* The Client-Side Form Component */}
@@ -39,7 +39,7 @@ export default function LoginPage() {
         {/* Footer Small Print */}
         <div className="absolute bottom-8 text-center w-full max-w-md px-6">
           <p className="text-xs font-medium text-outline">
-            © 2024 AgroDirect. Soil to Storefront.<br/>
+            © 2024 Khetify. Soil to Storefront.<br/>
             By signing in, you agree to our{' '}
             <a href="#" className="underline hover:text-primary transition-colors">Terms of Service</a> and{' '}
             <a href="#" className="underline hover:text-primary transition-colors">Privacy Policy</a>.

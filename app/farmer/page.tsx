@@ -14,11 +14,9 @@ export default function FarmerDashboard() {
 
   useEffect(() => {
     async function fetchGreeting() {
-      // Get the real logged-in user
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) return;
 
-      // Fetch their specific farm name
       const { data } = await supabase
         .from('farm_profiles')
         .select('farm_name')
@@ -32,6 +30,15 @@ export default function FarmerDashboard() {
       }
     }
     fetchGreeting();
+
+    // THE FIX: Listen to real-time changes so the name updates instantly!
+    const channel = supabase.channel('dashboard-greeting-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_profiles' }, () => {
+        fetchGreeting();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (
@@ -46,8 +53,7 @@ export default function FarmerDashboard() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
             <div>
               <h1 className="text-3xl font-bold text-on-surface mb-2 tracking-tight">Dashboard Overview</h1>
-              {/* THE FIX: Dynamic Greeting! */}
-              <p className="text-on-surface-variant">Welcome back, {farmName}. Here is your daily summary.</p>
+              <p className="text-on-surface-variant">Welcome back, <span className="font-bold text-primary">{farmName}</span>. Here is your daily summary.</p>
             </div>
             <Link 
               href="/farmer/add-listing"
@@ -70,7 +76,6 @@ export default function FarmerDashboard() {
           </div>
 
           <LogisticsBanner />
-
         </main>
       </div>
     </div>

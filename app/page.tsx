@@ -10,7 +10,7 @@ export default function Home() {
       
       {/* Market Ticker logic would follow here */}
       <footer className="bg-surface-container-low border-t border-outline-variant py-8 text-center text-sm text-on-surface-variant">
-        © 2024 AgroDirect Marketplace. Direct from Soil to Storefront.
+        © 2024 Khetify Marketplace. Direct from Soil to Storefront.
       </footer>
     </main>
   );

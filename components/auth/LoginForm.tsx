@@ -59,7 +59,7 @@ export default function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="farmer@agrodirect.com" 
+            placeholder="farmer@Khetify.com" 
             className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container-lowest focus:ring-2 focus:ring-primary focus:border-primary outline-none"
           />
         </div>
@@ -87,7 +87,7 @@ export default function LoginForm() {
       </form>
 
       <p className="text-center text-base text-on-surface-variant pt-4 font-medium">
-        New to AgroDirect?{' '}
+        New to Khetify?{' '}
         <Link href="/register" className="text-primary font-bold hover:underline">Join the marketplace</Link>
       </p>
     </div>

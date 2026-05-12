@@ -103,14 +103,14 @@ export default function PriceSummaryCard() {
         </button>
         
         <p className="text-center text-xs font-medium text-on-surface-variant mt-4 leading-relaxed">
-          By placing an order, you agree to AgroDirect's terms of service and harvest policies.
+          By placing an order, you agree to Khetify's terms of service and harvest policies.
         </p>
       </section>
 
       <div className="flex items-center gap-3 p-4 bg-primary-container/10 border border-primary/20 rounded-lg">
         <span className="material-symbols-outlined text-primary filled-icon text-[32px]">verified_user</span>
         <div>
-          <p className="font-bold text-primary text-sm">AgroDirect Verified</p>
+          <p className="font-bold text-primary text-sm">Khetify Verified</p>
           <p className="text-on-surface-variant text-xs font-medium mt-0.5">Secure escrow payment enabled.</p>
         </div>
       </div>

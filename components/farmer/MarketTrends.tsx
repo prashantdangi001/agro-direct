@@ -50,7 +50,7 @@ export default function MarketTrends() {
       <div className="flex justify-between items-center mb-6 border-b border-outline-variant pb-4">
         <div>
           <h3 className="text-xl font-bold text-on-surface">Platform Demand Trends</h3>
-          <p className="text-sm text-on-surface-variant">Daily order volume across AgroDirect</p>
+          <p className="text-sm text-on-surface-variant">Daily order volume across Khetify</p>
         </div>
         <div className="bg-surface-container-low border border-outline-variant text-sm font-bold rounded-lg px-3 py-2 text-on-surface-variant">
           Live Data

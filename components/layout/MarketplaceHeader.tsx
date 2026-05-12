@@ -6,7 +6,7 @@ export default function MarketplaceHeader() {
       <nav className="flex justify-between items-center w-full px-4 md:px-12 py-2 max-w-[1280px] mx-auto">
         {/* Brand Logo */}
         <Link href="/" className="text-2xl font-bold text-primary tracking-tight">
-          AgroDirect
+          Khetify
         </Link>
 
         {/* Desktop Navigation */}

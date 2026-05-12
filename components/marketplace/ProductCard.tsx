@@ -1,81 +1,78 @@
 'use client';
+import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
 import { useState } from 'react';
-import Link from 'next/link'; // ADD THIS
 
 interface ProductCardProps {
   id: string;
   name: string;
   farm: string;
-  price: string;
+  price: string | number;
   unit: string;
   tag?: string;
   image: string;
+  farmerId: string; // <-- THE CRITICAL MISSING LINK
 }
 
-export default function ProductCard({ id, name, farm, price, unit, tag, image }: ProductCardProps) {
+export default function ProductCard({ id, name, farm, price, unit, tag, image, farmerId }: ProductCardProps) {
   const { addToCart } = useCart();
   const [added, setAdded] = useState(false);
 
-  const numericPrice = parseFloat(price.replace(/[^\d.]/g, '')) || 0;
+  // Extract numeric price safely whether it comes in as "INR 150" or just 150
+  const numericPrice = typeof price === 'string' ? parseFloat(price.replace(/[^0-9.]/g, '')) : price;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevents the click from redirecting to the product page
+    
     addToCart({
-      id, name, price: numericPrice, qty: 1, image, farm,
-      farmerId: ''
+      id,
+      name,
+      price: numericPrice,
+      qty: 1,
+      image,
+      farm,
+      farmerId // <-- This ensures the Checkout knows who to pay!
     });
+    
     setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
+    setTimeout(() => setAdded(false), 2000);
   };
 
   return (
-    <div className="bg-white rounded-lg border border-outline-variant overflow-hidden elevation-1 group hover:shadow-md transition-all flex flex-col">
-      {/* WRAP IMAGE IN LINK */}
-      <Link href={`/marketplace/${id}`} className="relative h-52 overflow-hidden block">
+    <Link href={`/marketplace/${id}`} className="group bg-white border border-outline-variant rounded-xl overflow-hidden elevation-1 hover:shadow-md transition-all flex flex-col h-full">
+      <div className="relative h-48 w-full bg-surface-container-high overflow-hidden">
         <img src={image} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         {tag && (
-          <span className="absolute top-3 left-3 bg-primary/10 text-primary border border-primary/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase">
+          <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-xs font-bold px-2.5 py-1 rounded-md text-on-surface shadow-sm">
             {tag}
-          </span>
+          </div>
         )}
-      </Link>
-
-      <div className="p-5 flex-grow flex flex-col">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            {/* WRAP TITLE IN LINK */}
-            <Link href={`/marketplace/${id}`}>
-              <h3 className="text-lg font-bold text-on-surface leading-tight mb-1 hover:text-primary transition-colors">{name}</h3>
-            </Link>
-            <div className="flex items-center gap-1 text-on-surface-variant text-xs">
-              <span>{farm}</span>
-              <span className="material-symbols-outlined text-primary text-sm filled-icon" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="block font-bold text-primary text-lg">{price}</span>
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase">per {unit}</span>
-          </div>
+      </div>
+      <div className="p-5 flex-1 flex flex-col">
+        <div className="flex justify-between items-start mb-2 gap-2">
+          <h3 className="font-bold text-lg text-on-surface line-clamp-1">{name}</h3>
         </div>
-
-        <div className="flex items-center justify-between mt-auto pt-6">
-          <Link href={`/marketplace/${id}`} className="flex items-center gap-2 text-on-surface-variant group/trace cursor-pointer">
-            <div className="w-8 h-8 bg-surface-container border border-outline-variant flex items-center justify-center rounded group-hover/trace:border-primary transition-colors">
-              <span className="material-symbols-outlined text-sm">qr_code_2</span>
-            </div>
-            <span className="text-[9px] leading-tight font-bold uppercase group-hover/trace:text-primary transition-colors">Scan to<br/>Trace Origin</span>
-          </Link>
-          
+        <p className="text-sm text-on-surface-variant mb-4 flex items-center gap-1">
+          <span className="material-symbols-outlined text-[16px]">storefront</span>
+          {farm}
+        </p>
+        <div className="mt-auto flex items-center justify-between">
+          <div>
+            <p className="font-bold text-primary text-lg">INR {numericPrice.toFixed(2)}</p>
+            <p className="text-xs text-on-surface-variant font-medium">per {unit}</p>
+          </div>
           <button 
             onClick={handleAddToCart}
-            className={`px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-1 ${
-              added ? 'bg-primary text-white' : 'bg-[#D97706] hover:bg-[#904d00] text-white'
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${
+              added ? 'bg-[#059669] text-white' : 'bg-primary-container text-on-primary-container hover:bg-primary hover:text-white'
             }`}
           >
-            {added ? <><span className="material-symbols-outlined text-sm">check</span> Added</> : 'Add to Cart'}
+            <span className="material-symbols-outlined text-[20px]">
+              {added ? 'check' : 'add_shopping_cart'}
+            </span>
           </button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

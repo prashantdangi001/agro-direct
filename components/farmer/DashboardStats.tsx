@@ -38,7 +38,7 @@ export default function DashboardStats() {
   }, []);
 
   const statCards = [
-    { title: "Total Revenue", value: `KES ${stats.revenue.toFixed(2)}`, trend: "+12.5%", isUp: true, icon: "payments", isAlert: false },
+    { title: "Total Revenue", value: `INR ${stats.revenue.toFixed(2)}`, trend: "+12.5%", isUp: true, icon: "payments", isAlert: false },
     { title: "Active Listings", value: stats.products.toString(), trend: "+2", isUp: true, icon: "inventory_2", isAlert: false },
     { title: "Pending Orders", value: stats.orders.toString(), trend: stats.orders > 0 ? "Action Required" : "Cleared", isUp: stats.orders === 0, icon: "local_shipping", isAlert: stats.orders > 0 },
     { title: "Profile Views", value: stats.views.toLocaleString(), trend: "Live", isUp: true, icon: "visibility", isAlert: false }

@@ -10,7 +10,7 @@ export default function MarketplaceNavbar() {
     <header className="sticky top-0 w-full z-50 flex justify-between items-center px-4 md:px-12 py-4 max-w-[1280px] mx-auto bg-surface border-b border-outline-variant shadow-sm">
       <div className="flex items-center gap-4">
         <Link href="/" className="text-2xl font-bold text-primary hover:opacity-80 transition-opacity">
-          AgroDirect
+          Khetify
         </Link>
       </div>
       

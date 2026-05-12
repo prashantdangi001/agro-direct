@@ -6,7 +6,7 @@ import { CartProvider } from "@/context/CartContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AgroDirect | Soil to Storefront",
+  title: "Khetify | Soil to Storefront",
   description: "Connecting regional farmers directly to wholesale buyers.",
 };
 

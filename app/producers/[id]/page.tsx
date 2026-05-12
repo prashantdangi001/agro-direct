@@ -180,7 +180,7 @@ export default function ProducerProfilePage() {
                         id={product.id}
                         name={product.name}
                         farm={profile.farm_name || "Farm"} 
-                        price={`KES ${product.price.toFixed(2)}`}
+                        price={`INR ${product.price.toFixed(2)}`}
                         unit={product.unit}
                         image={product.image_url || "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?q=80&w=600&auto=format&fit=crop"} 
                       />
