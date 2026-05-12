@@ -1,41 +1,147 @@
 'use client';
 import { useState } from 'react';
+import { useCart } from '@/context/CartContext';
+import { useRouter } from 'next/navigation';
 
-export default function ProductPurchaseCard() {
-  const [qty, setQty] = useState(1);
+interface ProductPurchaseProps {
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    unit: string;
+    stock: number;
+    image: string;
+    farm: string;
+  };
+}
+
+export default function ProductPurchaseCard({ product }: ProductPurchaseProps) {
+  const { addToCart } = useCart();
+  const router = useRouter();
+  
+  // Local state for the quantity stepper
+  const [quantity, setQuantity] = useState(1);
+  const [added, setAdded] = useState(false);
+
+  // Handlers for the Stepper
+  const handleIncrease = () => {
+    if (quantity < product.stock) {
+      setQuantity(prev => prev + 1);
+    }
+  };
+
+  const handleDecrease = () => {
+    if (quantity > 1) {
+      setQuantity(prev => prev - 1);
+    }
+  };
+
+  // Add to Cart Logic
+  const handleAddToCart = () => {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
+      qty: quantity,
+      image: product.image,
+      farm: product.farm
+    });
+
+    // Show a quick success animation
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2000);
+  };
+
+  // Buy Now Logic (Add to cart + Redirect to checkout)
+  const handleBuyNow = () => {
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
+      qty: quantity,
+      image: product.image,
+      farm: product.farm
+    });
+    router.push('/checkout');
+  };
+
+  // Ensure price is safely formatted
+  const numericPrice = typeof product.price === 'string' ? parseFloat(product.price) : (product.price || 0);
 
   return (
-    <div className="bg-surface-container-low p-6 rounded-xl border border-outline-variant mb-8">
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-sm text-on-surface">Quantity (kg)</span>
-          <div className="flex items-center border border-outline rounded-lg bg-white overflow-hidden">
-            <button 
-              onClick={() => setQty(Math.max(1, qty - 1))}
-              className="p-3 hover:bg-surface-variant transition-colors"
-            >
-              <span className="material-symbols-outlined">remove</span>
-            </button>
-            <input 
-              type="number" 
-              className="w-16 text-center border-none bg-transparent focus:ring-0 font-bold" 
-              value={qty}
-              readOnly 
-            />
-            <button 
-              onClick={() => setQty(qty + 1)}
-              className="p-3 hover:bg-surface-variant transition-colors"
-            >
-              <span className="material-symbols-outlined">add</span>
-            </button>
-          </div>
+    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 md:p-8 elevation-1 shadow-sm">
+      
+      {/* Price Header */}
+      <div className="mb-6">
+        <div className="flex items-end gap-2 mb-1">
+          <span className="text-4xl font-bold text-primary tracking-tight">INR {numericPrice.toFixed(2)}</span>
+          <span className="text-on-surface-variant font-medium mb-1">/ {product.unit}</span>
         </div>
-        
-        {/* Action Button: Warm Amber (#fe932c) */}
-        <button className="w-full bg-[#fe932c] hover:bg-[#6e3900] text-[#663500] hover:text-white py-4 rounded-lg font-bold text-lg shadow-sm transition-all active:scale-[0.98] flex justify-center items-center gap-3">
-          <span className="material-symbols-outlined">shopping_basket</span>
-          Add to Cart
+        <p className={`text-sm font-bold mt-2 ${product.stock > 10 ? 'text-[#006c4a]' : 'text-[#904d00]'}`}>
+          {product.stock > 0 ? `${product.stock} ${product.unit} available in stock` : 'Out of Stock'}
+        </p>
+      </div>
+
+      {/* Quantity Stepper */}
+      <div className="mb-8">
+        <label className="block text-sm font-bold text-on-surface mb-3">Select Quantity</label>
+        <div className="flex items-center border border-outline-variant rounded-lg overflow-hidden bg-surface-container-low h-12 w-full max-w-[200px]">
+          <button 
+            onClick={handleDecrease}
+            disabled={quantity <= 1}
+            className="flex-1 h-full flex items-center justify-center hover:bg-surface-variant text-on-surface-variant transition-colors disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined">remove</span>
+          </button>
+          <span className="w-16 text-center font-bold text-lg bg-white h-full flex items-center justify-center border-x border-outline-variant">
+            {quantity}
+          </span>
+          <button 
+            onClick={handleIncrease}
+            disabled={quantity >= product.stock}
+            className="flex-1 h-full flex items-center justify-center hover:bg-surface-variant text-on-surface-variant transition-colors disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined">add</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="space-y-3">
+        <button 
+          onClick={handleAddToCart}
+          disabled={product.stock === 0}
+          className={`w-full py-4 rounded-lg font-bold text-lg shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+            added ? 'bg-primary-container text-on-primary-container border border-primary/20' : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface border border-outline-variant'
+          }`}
+        >
+          {added ? (
+            <><span className="material-symbols-outlined text-primary">check_circle</span> Added to Cart</>
+          ) : (
+            <><span className="material-symbols-outlined">add_shopping_cart</span> Add to Cart</>
+          )}
         </button>
+
+        <button 
+          onClick={handleBuyNow}
+          disabled={product.stock === 0}
+          className="w-full py-4 rounded-lg font-bold text-lg text-white bg-[#D97706] hover:bg-[#b05f02] shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span className="material-symbols-outlined">bolt</span>
+          Buy it Now
+        </button>
+      </div>
+
+      {/* Trust Badges */}
+      <div className="mt-8 pt-6 border-t border-outline-variant space-y-4">
+        <div className="flex items-center gap-3 text-on-surface-variant">
+          <span className="material-symbols-outlined text-primary">verified_user</span>
+          <span className="text-sm font-medium">Secure Escrow Payment</span>
+        </div>
+        <div className="flex items-center gap-3 text-on-surface-variant">
+          <span className="material-symbols-outlined text-primary">local_shipping</span>
+          <span className="text-sm font-medium">Direct Farm-to-Door Logistics</span>
+        </div>
       </div>
     </div>
   );

@@ -45,10 +45,13 @@ export default function FarmerSidebar() {
           <span className="text-sm font-bold">Order History</span>
         </Link>
 
-        <Link href="#" className="flex items-center gap-3 text-on-surface-variant px-4 py-3 mx-2 hover:bg-surface-container-high transition-all active:scale-95 rounded-lg">
-          <span className="material-symbols-outlined">settings</span>
-          <span className="text-sm font-bold">Settings</span>
-        </Link>
+       <Link 
+  href="/farmer/settings" 
+  className={`flex items-center gap-3 px-4 py-3 mx-2 transition-all active:scale-95 rounded-lg ${isActive('/farmer/settings') ? 'bg-primary-container text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high'}`}
+>
+  <span className="material-symbols-outlined">settings</span>
+  <span className="text-sm font-bold">Settings</span>
+</Link>
       </nav>
 
       <div className="mt-auto px-4 pb-6">

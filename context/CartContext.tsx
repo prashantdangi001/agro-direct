@@ -26,13 +26,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCart = (newItem: CartItem) => {
     setCart((prevCart) => {
+      // Check if the item is already in the cart
       const existingItem = prevCart.find((item) => item.id === newItem.id);
+      
+      // Use the quantity passed from the component, or default to 1
+      const quantityToAdd = newItem.qty || 1;
+
       if (existingItem) {
+        // If it exists, add the NEW quantity to the EXISTING quantity
         return prevCart.map((item) =>
-          item.id === newItem.id ? { ...item, qty: item.qty + 1 } : item
+          item.id === newItem.id ? { ...item, qty: item.qty + quantityToAdd } : item
         );
       }
-      return [...prevCart, { ...newItem, qty: 1 }];
+      
+      // If it's a brand new item, add it with the requested quantity
+      return [...prevCart, { ...newItem, qty: quantityToAdd }];
     });
   };
 
@@ -40,10 +48,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
-  // NEW: Function to handle the +/- buttons
   const updateQuantity = (id: string, qty: number) => {
     if (qty < 1) {
-      removeFromCart(id); // Remove if they dial it down to 0
+      removeFromCart(id);
       return;
     }
     setCart((prevCart) => 

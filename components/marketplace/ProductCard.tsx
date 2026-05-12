@@ -1,9 +1,10 @@
 'use client';
 import { useCart } from '@/context/CartContext';
 import { useState } from 'react';
+import Link from 'next/link'; // ADD THIS
 
 interface ProductCardProps {
-  id?: string;
+  id: string;
   name: string;
   farm: string;
   price: string;
@@ -12,43 +13,37 @@ interface ProductCardProps {
   image: string;
 }
 
-export default function ProductCard({ id = "temp-id", name, farm, price, unit, tag, image }: ProductCardProps) {
+export default function ProductCard({ id, name, farm, price, unit, tag, image }: ProductCardProps) {
   const { addToCart } = useCart();
   const [added, setAdded] = useState(false);
 
-  // Extract the numeric value from the price string (e.g., "INR 150.00" -> 150)
   const numericPrice = parseFloat(price.replace(/[^\d.]/g, '')) || 0;
 
   const handleAddToCart = () => {
-    addToCart({
-      id: name, // Using name as ID for the demo if ID isn't passed
-      name,
-      price: numericPrice,
-      qty: 1,
-      image,
-      farm
-    });
-    
-    // Show brief feedback animation
+    addToCart({ id, name, price: numericPrice, qty: 1, image, farm });
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   };
 
   return (
     <div className="bg-white rounded-lg border border-outline-variant overflow-hidden elevation-1 group hover:shadow-md transition-all flex flex-col">
-      <div className="relative h-52 overflow-hidden">
+      {/* WRAP IMAGE IN LINK */}
+      <Link href={`/marketplace/${id}`} className="relative h-52 overflow-hidden block">
         <img src={image} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         {tag && (
           <span className="absolute top-3 left-3 bg-primary/10 text-primary border border-primary/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold uppercase">
             {tag}
           </span>
         )}
-      </div>
+      </Link>
 
       <div className="p-5 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h3 className="text-lg font-bold text-on-surface leading-tight mb-1">{name}</h3>
+            {/* WRAP TITLE IN LINK */}
+            <Link href={`/marketplace/${id}`}>
+              <h3 className="text-lg font-bold text-on-surface leading-tight mb-1 hover:text-primary transition-colors">{name}</h3>
+            </Link>
             <div className="flex items-center gap-1 text-on-surface-variant text-xs">
               <span>{farm}</span>
               <span className="material-symbols-outlined text-primary text-sm filled-icon" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
@@ -61,12 +56,12 @@ export default function ProductCard({ id = "temp-id", name, farm, price, unit, t
         </div>
 
         <div className="flex items-center justify-between mt-auto pt-6">
-          <div className="flex items-center gap-2 text-on-surface-variant group/trace cursor-pointer">
+          <Link href={`/marketplace/${id}`} className="flex items-center gap-2 text-on-surface-variant group/trace cursor-pointer">
             <div className="w-8 h-8 bg-surface-container border border-outline-variant flex items-center justify-center rounded group-hover/trace:border-primary transition-colors">
               <span className="material-symbols-outlined text-sm">qr_code_2</span>
             </div>
-            <span className="text-[9px] leading-tight font-bold uppercase">Scan to<br/>Trace Origin</span>
-          </div>
+            <span className="text-[9px] leading-tight font-bold uppercase group-hover/trace:text-primary transition-colors">Scan to<br/>Trace Origin</span>
+          </Link>
           
           <button 
             onClick={handleAddToCart}
