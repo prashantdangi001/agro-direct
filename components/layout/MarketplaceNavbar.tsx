@@ -140,7 +140,7 @@ export default function MarketplaceNavbar() {
             </div>
 
             {/* CART */}
-            <Link href="/checkout" className="relative p-2 text-primary hover:bg-surface-container-high rounded-full transition-colors animate-in fade-in">
+            <Link href="/cart" className="relative p-2 text-primary hover:bg-surface-container-high rounded-full transition-colors animate-in fade-in">
               <span className="material-symbols-outlined">shopping_cart</span>
               {cartCount > 0 && (
                 <span className="absolute top-0 right-0 w-5 h-5 bg-[#ba1a1a] text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-surface animate-in zoom-in">

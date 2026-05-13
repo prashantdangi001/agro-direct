@@ -1,77 +1,24 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
-export default function VerificationTable() {
-  const [pendingFarms, setPendingFarms] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+// Define the exact shape of your Supabase table
+export interface FarmProfile {
+  id: string;
+  farm_name: string;
+  location: string;
+  practices: string;
+  verification_status: string;
+  profile_pic_url?: string;
+}
 
-  const fetchPendingFarms = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('farm_profiles')
-      .select('*')
-      .eq('verification_status', 'Pending Review')
-      .order('farm_name', { ascending: true });
+interface VerificationTableProps {
+  farmers: FarmProfile[];
+  onVerify: (id: string, farmName: string) => Promise<void>;
+  onReject: (id: string) => Promise<void>;
+}
 
-    if (!error && data) {
-      setPendingFarms(data);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchPendingFarms();
-
-    // Listen for new farms signing up!
-    const channel = supabase.channel('admin-verifications')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_profiles' }, () => {
-        fetchPendingFarms();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  const handleVerify = async (id: string, farmName: string) => {
-    if (confirm(`Are you sure you want to officially verify ${farmName}? This will grant them the trusted badge on the marketplace.`)) {
-      const { error } = await supabase
-        .from('farm_profiles')
-        .update({ verification_status: 'Verified' })
-        .eq('id', id);
-
-      if (!error) {
-        // Remove from UI instantly
-        setPendingFarms(pendingFarms.filter(farm => farm.id !== id));
-      } else {
-        alert("Verification failed. Please try again.");
-      }
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    const reason = prompt("Enter rejection reason (this will be sent to the farmer):");
-    if (reason) {
-      const { error } = await supabase
-        .from('farm_profiles')
-        .update({ verification_status: 'Rejected' })
-        .eq('id', id);
-
-      if (!error) {
-        setPendingFarms(pendingFarms.filter(farm => farm.id !== id));
-      }
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="bg-white rounded-xl border border-outline-variant p-12 flex justify-center elevation-1">
-        <div className="w-8 h-8 border-4 border-surface-container-high border-t-primary rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (pendingFarms.length === 0) {
+export default function VerificationTable({ farmers, onVerify, onReject }: VerificationTableProps) {
+  
+  if (farmers.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-outline-variant p-12 text-center elevation-1">
         <span className="material-symbols-outlined text-6xl text-primary/40 mb-4">task_alt</span>
@@ -95,7 +42,7 @@ export default function VerificationTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
-            {pendingFarms.map((farm) => (
+            {farmers.map((farm) => (
               <tr key={farm.id} className="hover:bg-surface-bright transition-colors group">
                 <td className="py-4 px-6">
                   <div className="flex items-center gap-3">
@@ -125,13 +72,13 @@ export default function VerificationTable() {
                 <td className="py-4 px-6 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button 
-                      onClick={() => handleReject(farm.id)}
+                      onClick={() => onReject(farm.id)}
                       className="px-3 py-2 text-error font-bold text-xs hover:bg-error/10 rounded-lg transition-colors border border-transparent hover:border-error/20"
                     >
                       Reject
                     </button>
                     <button 
-                      onClick={() => handleVerify(farm.id, farm.farm_name)}
+                      onClick={() => onVerify(farm.id, farm.farm_name)}
                       className="bg-[#006948] hover:bg-[#00855d] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center gap-1"
                     >
                       <span className="material-symbols-outlined text-sm">verified</span>

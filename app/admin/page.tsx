@@ -1,16 +1,36 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'verify' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'verify' | 'ledger' | 'users'>('overview');
   
-  // Data States
-  const [stats, setStats] = useState({ totalOrders: 0, totalRevenue: 0, activeFarmers: 0 });
+  // Platform States
+  const [stats, setStats] = useState({ totalOrders: 0, totalRevenue: 0, activeFarmers: 0, pendingKYC: 0 });
   const [allFarmers, setAllFarmers] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
+
+  // 1. Data Fetching Logic (Real-time Synced)
+  const syncPlatformData = useCallback(async () => {
+    const { data: orders } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    const { data: profiles } = await supabase.from('farm_profiles').select('*').order('created_at', { ascending: false });
+
+    if (orders && profiles) {
+      setAllOrders(orders);
+      setAllFarmers(profiles);
+      setStats({
+        totalOrders: orders.length,
+        totalRevenue: orders.reduce((sum, order) => sum + (Number(order.total_amount) || 0), 0),
+        activeFarmers: new Set(orders.map(o => o.farmer_id)).size,
+        pendingKYC: profiles.filter(p => p.verification_status === 'pending').length
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const initializeAdmin = async () => {
@@ -19,205 +39,151 @@ export default function AdminDashboard() {
         router.push('/');
         return;
       }
-      fetchPlatformData();
-      fetchAllFarmers();
+      await syncPlatformData();
+      setLoading(false);
     };
+
     initializeAdmin();
-  }, [router]);
 
-  const fetchPlatformData = async () => {
-    const { data: ordersData } = await supabase.from('orders').select('*');
-    if (ordersData) {
-      setStats({
-        totalOrders: ordersData.length,
-        totalRevenue: ordersData.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0),
-        activeFarmers: new Set(ordersData.map((order: any) => order.farmer_id)).size
-      });
-    }
-  };
+    const channel = supabase.channel('khetify-admin-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'farm_profiles' }, () => syncPlatformData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => syncPlatformData())
+      .subscribe();
 
-  const fetchAllFarmers = async () => {
-    const { data } = await supabase.from('farm_profiles').select('*').order('created_at', { ascending: false });
-    if (data) setAllFarmers(data);
-    setLoading(false);
-  };
+    return () => { supabase.removeChannel(channel); };
+  }, [router, syncPlatformData]);
 
-  // --- ADMIN ACTIONS ---
-
- const handleApproveFarmer = async (farmerId: string, farmerPhone: string) => {
-    if (!window.confirm("Approve this farmer and grant Verified Badge?")) return;
-    
-    // 1. Approve them in the Database
+  const handleApproveFarmer = async (farmerId: string, phone: string) => {
     const { error } = await supabase.from('farm_profiles').update({ verification_status: 'verified' }).eq('id', farmerId);
-    
     if (!error) {
-      // Update UI immediately
-      setAllFarmers(prev => prev.map(f => f.id === farmerId ? { ...f, verification_status: 'verified' } : f));
-      
-      // ✨ 2. THE TRUE REAL-TIME WHATSAPP TRIGGER ✨
       try {
-        // Clean the phone number (UltraMsg wants country code without the '+' sign)
-        // E.g., if input is "+91 98765 43210", it becomes "919876543210"
-        let cleanPhone = farmerPhone.replace(/\D/g, ''); 
-        
-        // Ensure it has the Indian country code if the user forgot it
-        if (cleanPhone.length === 10) {
-          cleanPhone = `91${cleanPhone}`;
-        }
-
+        let cleanPhone = phone.replace(/\D/g, ''); 
+        if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
         await fetch('/api/whatsapp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: JSON.stringify({ 
             to: cleanPhone, 
-            message: "✅ *Khetify Admin Alert*\n\nCongratulations! Your Farm Profile and APAAR ID have been verified. You can now list crops and receive secure Escrow payments."
+            message: "✅ *Khetify Verified*\n\nYour producer profile has been approved! You can now start listing your harvest." 
           })
         });
-        
-        console.log("Real-time automated WhatsApp alert dispatched!");
-      } catch (err) {
-        console.error("Failed to trigger WhatsApp route:", err);
-      }
-      
-      alert("Farmer Approved! Automated WhatsApp notification triggered.");
-    } else {
-      alert("Error approving farmer.");
+        alert("Farmer Verified & Notified!");
+      } catch (e) { console.error(e); }
     }
   };
 
-  const handleDeleteUser = async (farmerId: string) => {
-    if (!window.confirm("CRITICAL WARNING: Are you sure you want to permanently delete this user's profile and ban them from the platform?")) return;
-
-    const { error } = await supabase.from('farm_profiles').delete().eq('id', farmerId);
-    if (!error) {
-      alert("User account successfully deleted.");
-      setAllFarmers(prev => prev.filter(f => f.id !== farmerId));
-    } else {
-      alert("Failed to delete user.");
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-t-primary rounded-full animate-spin"></div></div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F8FAF9]">
+      <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+    </div>
+  );
 
   const pendingFarmers = allFarmers.filter(f => f.verification_status === 'pending');
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-[#111827] text-white flex flex-col fixed h-full z-20 shadow-xl">
-        <div className="p-6 border-b border-gray-800">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="material-symbols-outlined text-primary text-3xl">admin_panel_settings</span>
-            <span className="text-2xl font-bold text-white tracking-tight">Khetify</span>
-          </div>
-          <span className="text-[10px] uppercase tracking-widest text-primary font-bold bg-primary/10 px-2 py-0.5 rounded ml-10">Admin Portal</span>
+    <div className="min-h-screen bg-[#F8FAF9] flex font-sans">
+      
+      {/* 🌿 BRANDED SIDEBAR */}
+      <aside className="w-72 bg-white flex flex-col fixed h-full z-20 border-r border-outline-variant">
+        <div className="p-10 border-b border-outline-variant">
+          <Link href="/" className="text-3xl font-black tracking-tighter text-primary italic">
+            KHETIFY
+          </Link>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-black mt-1">Management Hub</p>
         </div>
         
-        <nav className="flex-1 py-6 px-3 space-y-2">
-          <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg font-bold transition-colors text-left ${activeTab === 'overview' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-            <span className="material-symbols-outlined">dashboard</span> Platform Overview
-          </button>
-          
-          <button onClick={() => setActiveTab('verify')} className={`w-full flex items-center justify-between px-3 py-3 rounded-lg font-bold transition-colors text-left ${activeTab === 'verify' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-            <div className="flex items-center gap-3"><span className="material-symbols-outlined">how_to_reg</span> KYC Approvals</div>
-            {pendingFarmers.length > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full shadow-sm">{pendingFarmers.length}</span>}
-          </button>
-
-          <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg font-bold transition-colors text-left ${activeTab === 'users' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
-            <span className="material-symbols-outlined">manage_accounts</span> User Management
-          </button>
+        <nav className="flex-1 py-10 px-4 space-y-2">
+          {[
+            { id: 'overview', icon: 'monitoring', label: 'Ecosystem Stats' },
+            { id: 'verify', icon: 'verified_user', label: 'KYC Queue', count: stats.pendingKYC },
+            { id: 'ledger', icon: 'account_balance', label: 'Escrow Ledger' },
+            { id: 'users', icon: 'groups', label: 'Producers' }
+          ].map((tab) => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)} 
+              className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl font-black text-sm transition-all ${
+                activeTab === tab.id 
+                ? 'bg-primary text-white shadow-xl shadow-primary/20' 
+                : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined">{tab.icon}</span> {tab.label}
+              </div>
+              {tab.count !== undefined && tab.count > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === tab.id ? 'bg-white text-primary' : 'bg-red-500 text-white'}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
-          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg font-bold transition-all">
-            <span className="material-symbols-outlined text-[18px]">logout</span> Sign Out
+        <div className="p-8 border-t border-outline-variant bg-surface-container-lowest">
+          <button onClick={() => { supabase.auth.signOut(); router.push('/login'); }} className="w-full flex items-center justify-center gap-3 py-3 text-on-surface-variant font-bold hover:text-red-500 transition-colors">
+            <span className="material-symbols-outlined">logout</span> Exit Admin
           </button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 ml-64 p-8 lg:p-12">
+      {/* 🚜 MAIN WORKSPACE */}
+      <main className="flex-1 ml-72 p-12">
+        <header className="mb-12">
+            <h1 className="text-4xl font-black text-on-surface tracking-tight uppercase italic">{activeTab}</h1>
+            <p className="text-on-surface-variant font-medium mt-1 uppercase tracking-widest text-[10px]">Real-time Network Monitoring</p>
+        </header>
         
-        {/* TAB 1: OVERVIEW */}
+        {/* TAB: OVERVIEW */}
         {activeTab === 'overview' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-on-surface">Platform Overview</h1>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-2xl border border-outline-variant elevation-1 shadow-sm">
-                <p className="text-sm font-bold text-on-surface-variant uppercase mb-1">Total Escrow Volume</p>
-                <h3 className="text-3xl font-bold text-on-surface">INR {stats.totalRevenue.toLocaleString()}</h3>
-              </div>
-              <div className="bg-white p-6 rounded-2xl border border-outline-variant elevation-1 shadow-sm">
-                <p className="text-sm font-bold text-on-surface-variant uppercase mb-1">Orders Processed</p>
-                <h3 className="text-3xl font-bold text-on-surface">{stats.totalOrders}</h3>
-              </div>
-              <div className="bg-white p-6 rounded-2xl border border-outline-variant elevation-1 shadow-sm">
-                <p className="text-sm font-bold text-on-surface-variant uppercase mb-1">Registered Farms</p>
-                <h3 className="text-3xl font-bold text-on-surface">{allFarmers.length}</h3>
-              </div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { label: 'Platform Volume', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: 'payments', bg: 'bg-primary/5', text: 'text-primary' },
+                { label: 'Settled Orders', value: stats.totalOrders, icon: 'receipt_long', bg: 'bg-surface-container', text: 'text-on-surface' },
+                { label: 'Active Producers', value: stats.activeFarmers, icon: 'agriculture', bg: 'bg-surface-container', text: 'text-on-surface' }
+              ].map((card, i) => (
+                <div key={i} className="bg-white p-10 rounded-[32px] border border-outline-variant shadow-sm hover:shadow-xl transition-all">
+                  <div className={`w-14 h-14 ${card.bg} rounded-2xl flex items-center justify-center ${card.text} mb-8`}>
+                    <span className="material-symbols-outlined text-3xl">{card.icon}</span>
+                  </div>
+                  <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-[0.2em] mb-2">{card.label}</p>
+                  <h3 className={`text-4xl font-black ${card.text}`}>{card.value}</h3>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* TAB 2: VERIFY FARMERS (KYC) */}
+        {/* TAB: KYC QUEUE */}
         {activeTab === 'verify' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-on-surface">KYC Verifications</h1>
-              <p className="text-on-surface-variant">Review ID scans, Kissan IDs, and APAAR IDs carefully before granting the Verified Badge.</p>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-outline-variant elevation-1 overflow-hidden shadow-sm">
-              <table className="w-full text-left min-w-[800px]">
-                <thead>
-                  <tr className="bg-surface-container-low border-b border-outline-variant">
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Farm Profile</th>
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">KYC IDs</th>
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Identity Document</th>
-                    <th className="py-3 px-6 text-right text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Decision</th>
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white rounded-[40px] border border-outline-variant overflow-hidden shadow-sm">
+              <table className="w-full text-left">
+                <thead className="bg-surface-container-low border-b border-outline-variant">
+                  <tr>
+                    <th className="py-6 px-10 text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Farmer Identity</th>
+                    <th className="py-6 px-10 text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Documents</th>
+                    <th className="py-6 px-10 text-right text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Decision</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-outline-variant/30">
                   {pendingFarmers.length === 0 ? (
-                    <tr><td colSpan={4} className="py-12 text-center font-bold text-on-surface-variant">No pending verifications. Queue is clear!</td></tr>
+                    <tr><td colSpan={3} className="py-32 text-center font-bold text-on-surface-variant italic">System Secure. No pending KYC.</td></tr>
                   ) : (
-                    pendingFarmers.map((farmer) => (
-                      <tr key={farmer.id} className="border-b border-outline-variant hover:bg-surface-bright transition-colors">
-                        <td className="py-4 px-6">
-                          <p className="font-bold text-sm text-on-surface">{farmer.farm_name}</p>
-                          <p className="text-xs text-on-surface-variant">{farmer.full_name} • {farmer.contact_number}</p>
+                    pendingFarmers.map(f => (
+                      <tr key={f.id} className="hover:bg-primary/5 transition-colors group">
+                        <td className="py-8 px-10">
+                          <p className="font-black text-xl text-on-surface leading-tight group-hover:text-primary transition-colors">{f.farm_name}</p>
+                          <p className="text-xs text-on-surface-variant font-bold mt-1">{f.full_name} • {f.contact_number}</p>
                         </td>
-                        <td className="py-4 px-6 flex flex-col gap-1.5">
-                          <span className="font-mono text-xs font-bold text-[#D97706] bg-[#D97706]/10 px-2 py-1 rounded-md w-max border border-[#D97706]/20">
-                            Kissan: {farmer.kissan_id}
-                          </span>
-                          <span className="font-mono text-xs font-bold text-[#059669] bg-[#059669]/10 px-2 py-1 rounded-md w-max border border-[#059669]/20">
-                            APAAR: {farmer.apaar_id || 'Not Provided'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <a href={farmer.kyc_document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary hover:text-white hover:bg-primary text-sm font-bold bg-primary/10 px-4 py-2 rounded-lg w-max transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">badge</span> View ID Document
-                          </a>
-                        </td>
-                        <td className="py-4 px-6 text-right space-x-2">
-                          <button onClick={() => handleDeleteUser(farmer.id)} className="bg-white border-2 border-error/50 text-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error hover:border-error hover:text-white transition-all shadow-sm">
-                            Reject
+                        <td className="py-8 px-10">
+                          <button onClick={() => setSelectedDoc(f.kyc_document_url)} className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-low text-on-surface font-black text-[10px] uppercase rounded-xl hover:bg-primary hover:text-white transition-all">
+                            <span className="material-symbols-outlined text-[18px]">visibility</span> Review Document
                           </button>
-                          {/* UPDATED BUTTON: Passes both ID and Phone Number */}
-                          <button 
-                            onClick={() => handleApproveFarmer(farmer.id, farmer.contact_number)} 
-                            className="bg-[#059669] border-2 border-[#059669] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md hover:brightness-110 hover:-translate-y-0.5 transition-all"
-                          >
-                            Approve
-                          </button>
+                        </td>
+                        <td className="py-8 px-10 text-right">
+                          <button onClick={() => handleApproveFarmer(f.id, f.contact_number)} className="bg-primary text-white font-black text-xs px-8 py-3 rounded-2xl shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">APPROVE</button>
                         </td>
                       </tr>
                     ))
@@ -228,56 +194,33 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* TAB 3: USER MANAGEMENT */}
-        {activeTab === 'users' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-on-surface text-error flex items-center gap-2">
-                <span className="material-symbols-outlined text-3xl">warning</span>
-                Platform Access Control
-              </h1>
-              <p className="text-on-surface-variant">Manage all registered accounts. Deleting an account revokes platform access permanently.</p>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-error/20 elevation-1 overflow-hidden shadow-sm">
-              <table className="w-full text-left min-w-[800px]">
-                <thead>
-                  <tr className="bg-error/5 border-b border-error/20">
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-error">User / Farm Name</th>
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-error">Location & Contact</th>
-                    <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-error">Verification Status</th>
-                    <th className="py-3 px-6 text-right text-[11px] font-bold uppercase tracking-wider text-error">Danger Zone</th>
+        {/* TAB: LEDGER */}
+        {activeTab === 'ledger' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white rounded-[40px] border border-outline-variant overflow-hidden shadow-sm">
+              <table className="w-full text-left">
+                <thead className="bg-on-surface text-white/50">
+                  <tr>
+                    <th className="py-6 px-10 text-[10px] font-black uppercase tracking-widest">Transaction</th>
+                    <th className="py-6 px-10 text-[10px] font-black uppercase tracking-widest text-center">Amount</th>
+                    <th className="py-6 px-10 text-right text-[10px] font-black uppercase tracking-widest">Status</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {allFarmers.map((farmer) => (
-                    <tr key={farmer.id} className="border-b border-outline-variant hover:bg-surface-bright transition-colors">
-                      <td className="py-4 px-6">
-                        <p className="font-bold text-sm text-on-surface">{farmer.farm_name}</p>
-                        <p className="text-xs text-on-surface-variant">Owner: {farmer.full_name}</p>
+                <tbody className="divide-y divide-outline-variant/30">
+                  {allOrders.map(order => (
+                    <tr key={order.id} className="hover:bg-surface-container-lowest transition-colors">
+                      <td className="py-8 px-10">
+                        <p className="font-black text-on-surface">{order.farm_name}</p>
+                        <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter mt-1">ID: #{order.id.slice(0, 8)}</p>
                       </td>
-                      <td className="py-4 px-6">
-                        <p className="text-sm text-on-surface">{farmer.location}</p>
-                        <p className="text-xs text-on-surface-variant">{farmer.contact_number}</p>
+                      <td className="py-8 px-10 text-center">
+                        <p className="font-black text-2xl text-primary tracking-tighter">₹{order.total_amount?.toLocaleString()}</p>
+                        <p className="text-[9px] font-black text-primary/60 uppercase tracking-widest">No Commission</p>
                       </td>
-                      <td className="py-4 px-6">
-                        {farmer.verification_status === 'verified' ? (
-                          <span className="bg-[#059669]/10 text-[#059669] text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-max border border-[#059669]/20 shadow-sm">
-                            <span className="material-symbols-outlined text-[14px]">verified</span> Verified Badge
-                          </span>
-                        ) : (
-                          <span className="bg-surface-container-high text-on-surface-variant text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 w-max border border-outline-variant shadow-sm">
-                            <span className="material-symbols-outlined text-[14px]">hourglass_empty</span> Pending
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <button 
-                          onClick={() => handleDeleteUser(farmer.id)} 
-                          className="bg-error text-white px-4 py-2.5 rounded-lg text-xs font-bold hover:brightness-110 shadow-md flex items-center gap-1.5 ml-auto hover:-translate-y-0.5 transition-all"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">delete_forever</span> Ban User
-                        </button>
+                      <td className="py-8 px-10 text-right">
+                        <span className="bg-amber-50 text-amber-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-100">
+                          {order.escrow_status || 'locked'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -288,6 +231,14 @@ export default function AdminDashboard() {
         )}
 
       </main>
+
+      {/* 🖼️ DOCUMENT MODAL (GLASSMORPHIC) */}
+      {selectedDoc && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-on-surface/90 backdrop-blur-sm p-10 animate-in fade-in duration-300">
+          <button onClick={() => setSelectedDoc(null)} className="absolute top-10 right-10 text-white font-black text-[10px] tracking-widest bg-white/10 px-6 py-3 rounded-full hover:bg-white/20 transition-all">EXIT PREVIEW</button>
+          <img src={selectedDoc} className="max-w-full max-h-full rounded-[40px] object-contain shadow-2xl border-8 border-white/5" alt="KYC Document" />
+        </div>
+      )}
     </div>
   );
 }

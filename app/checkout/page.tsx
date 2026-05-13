@@ -4,28 +4,24 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MarketplaceNavbar from '@/components/layout/MarketplaceNavbar';
+import { useCart } from '@/context/CartContext'; 
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { cart, getCartTotal, clearCart } = useCart(); 
   const [user, setUser] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'idle' | 'verifying' | 'locking' | 'success'>('idle');
 
-  // HACKATHON DEMO DATA: 
-  const demoCart = [
-    { id: 1, name: "Organic Tomatoes", qty: 50, unit: "kg", price: 40, farmer_id: "demo-farmer-id", farm_name: "Green Valley Farms", farmer_phone: "919876543210" },
-    { id: 2, name: "Fresh Green Chilies", qty: 10, unit: "kg", price: 60, farmer_id: "demo-farmer-id", farm_name: "Green Valley Farms", farmer_phone: "919876543210" }
-  ];
-
-  const subtotal = demoCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const platformFee = 0; // ZERO COMMISSION!
+  // Financial calculations
+  const subtotal = getCartTotal();
+  const platformFee = 0; 
   const totalAmount = subtotal + platformFee;
 
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        alert("Please log in to proceed to checkout.");
         router.push('/login');
       } else {
         setUser(session.user);
@@ -35,210 +31,172 @@ export default function CheckoutPage() {
   }, [router]);
 
   const handleEscrowPayment = async () => {
-    if (!user) return;
+    if (!user || cart.length === 0) return;
     setIsProcessing(true);
     
-    // 1. UI Simulation: Verifying Funds
     setPaymentStep('verifying');
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // 2. UI Simulation: Locking Escrow
     setPaymentStep('locking');
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
-      // 3. Database: Save the Escrow Order
+      // 1. Database: Save the Real Escrow Order
+      const primaryProducer = cart[0];
+      
       const { error: dbError } = await supabase.from('orders').insert({
         buyer_id: user.id,
-        farmer_id: demoCart[0].farmer_id, 
-        farm_name: demoCart[0].farm_name,
-        items: demoCart,
+        farmer_id: primaryProducer.farmerId, 
+        farm_name: primaryProducer.farm,
+        items: cart, 
         total_amount: totalAmount,
         escrow_status: 'locked'
       });
 
-      if (dbError) {
-        console.error("DB Error:", dbError);
-      }
+      if (dbError) throw dbError;
 
-      // ✨ 4. THE TRUE REAL-TIME WHATSAPP TRIGGER ✨
-      const farmerPhone = demoCart[0].farmer_phone; 
-      
+      // 2. REAL-TIME WHATSAPP TRIGGER
       try {
-        // Clean the phone number (UltraMsg wants country code without the '+' sign)
-        let cleanPhone = farmerPhone.replace(/\D/g, ''); 
-        if (cleanPhone.length === 10) {
-          cleanPhone = `91${cleanPhone}`;
-        }
+        const { data: farmProfile } = await supabase
+          .from('farm_profiles')
+          .select('contact_number')
+          .eq('id', primaryProducer.farmerId)
+          .single();
 
-        const waMessage = `🟢 *Khetify Escrow Alert*\n\nGreat news! INR ${totalAmount.toLocaleString()} has been securely locked in Escrow by a buyer.\n\n*Order Details:*\n${demoCart.map(i => `- ${i.qty}${i.unit} ${i.name}`).join('\n')}\n\nPlease prepare the produce for dispatch.`;
-
-        // Silent backend fetch
-        await fetch('/api/whatsapp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: cleanPhone, 
-            message: waMessage
-          })
-        });
+        const producerPhone = farmProfile?.contact_number; 
         
-        console.log("Real-time automated Escrow WhatsApp alert dispatched!");
+        if (producerPhone) {
+          let cleanPhone = producerPhone.replace(/\D/g, ''); 
+          if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+
+          const waMessage = `🟢 *Khetify Escrow Alert*\n\nGreat news! INR ${totalAmount.toLocaleString()} has been securely locked in Escrow by a buyer.\n\n*Order Summary:*\n${cart.map(i => `- ${i.qty}x ${i.name}`).join('\n')}\n\nPlease prepare the produce for dispatch.`;
+
+          await fetch('/api/whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: cleanPhone, message: waMessage })
+          });
+        }
       } catch (err) {
-        console.error("Failed to trigger WhatsApp route:", err);
+        console.error("WhatsApp notification failed:", err);
       }
 
-      // 5. Success State
       setPaymentStep('success');
       setTimeout(() => {
+        clearCart();
         router.push('/marketplace'); 
-      }, 3500);
+      }, 3000);
 
     } catch (error: any) {
-      alert("Checkout failed: " + error.message);
+      alert("Escrow initiation failed: " + error.message);
       setIsProcessing(false);
       setPaymentStep('idle');
     }
   };
 
+  if (cart.length === 0 && paymentStep === 'idle') {
+    return (
+      <div className="bg-[#F8FAFC] min-h-screen flex flex-col">
+        <MarketplaceNavbar />
+        <main className="flex-1 flex flex-col items-center justify-center p-10">
+          <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">shopping_basket</span>
+          <h1 className="text-2xl font-black text-slate-900">Your cart is empty.</h1>
+          <Link href="/marketplace" className="mt-6 text-primary font-bold hover:underline">Return to Marketplace</Link>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-background min-h-screen flex flex-col font-sans transition-colors duration-300">
+    <div className="bg-[#F8FAFC] min-h-screen flex flex-col font-sans">
       <MarketplaceNavbar />
 
-      <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 md:px-12 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 md:px-12 py-10 animate-in fade-in duration-500">
         
         <div className="mb-8">
-          <Link href="/marketplace" className="inline-flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-colors">
-            <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Marketplace
+          <Link href="/marketplace" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-primary transition-colors group">
+            <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Back
           </Link>
-          <h1 className="text-3xl font-bold text-on-surface mt-4 tracking-tight">Secure Escrow Checkout</h1>
+          <h1 className="text-3xl font-black text-slate-900 mt-2 tracking-tight uppercase italic">Secure Checkout</h1>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+        <div className="flex flex-col lg:row gap-12 items-start lg:flex-row">
           
-          {/* LEFT: ORDER SUMMARY */}
+          {/* LEFT: ITEM REVIEW */}
           <div className="w-full lg:w-7/12 space-y-6">
-            <div className="bg-surface-container-lowest border border-outline-variant rounded-3xl p-6 md:p-8 shadow-sm">
-              <h2 className="text-xl font-bold text-on-surface mb-6 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">shopping_basket</span>
-                Order Summary
+            <div className="bg-white border border-slate-200 rounded-[32px] p-8 shadow-sm">
+              <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">local_mall</span> Review Your Order
               </h2>
 
               <div className="space-y-6">
-                {demoCart.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between border-b border-outline-variant/50 pb-6 last:border-0 last:pb-0">
+                {cart.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-4 border-b border-slate-50 last:border-0">
                     <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-surface-container-high rounded-xl flex items-center justify-center text-on-surface-variant">
-                        <span className="material-symbols-outlined text-3xl">nutrition</span>
+                      <div className="w-16 h-16 bg-slate-50 rounded-2xl overflow-hidden border">
+                        <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-on-surface">{item.name}</h3>
-                        <p className="text-sm text-on-surface-variant">From: <span className="font-medium text-primary">{item.farm_name}</span></p>
-                        <p className="text-xs text-on-surface-variant mt-1">₹{item.price} per {item.unit} x {item.qty}</p>
+                        <h3 className="font-black text-slate-900">{item.name}</h3>
+                        <p className="text-xs font-bold text-primary">{item.farm}</p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase mt-1">QTY: {item.qty}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-lg text-on-surface">₹{(item.price * item.qty).toLocaleString()}</p>
-                    </div>
+                    <p className="font-black text-lg text-slate-900">₹{(item.price * item.qty).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* TRUST BADGES */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#059669]/10 border border-[#059669]/20 rounded-2xl p-4 flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#059669]">verified_user</span>
-                <div>
-                  <p className="font-bold text-sm text-[#059669]">100% Quality Guaranteed</p>
-                  <p className="text-xs text-[#059669]/80 mt-0.5">Funds are held until delivery.</p>
-                </div>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 flex gap-4 items-start">
+                <div className="bg-green-100 text-green-600 p-2 rounded-lg"><span className="material-symbols-outlined">verified_user</span></div>
+                <div><p className="font-black text-xs uppercase text-slate-900">Escrow Protected</p><p className="text-[10px] text-slate-500 mt-1">Payment is held safely until you confirm delivery.</p></div>
               </div>
-              <div className="bg-[#D97706]/10 border border-[#D97706]/20 rounded-2xl p-4 flex items-start gap-3">
-                <span className="material-symbols-outlined text-[#D97706]">local_shipping</span>
-                <div>
-                  <p className="font-bold text-sm text-[#D97706]">Direct Farm Dispatch</p>
-                  <p className="text-xs text-[#D97706]/80 mt-0.5">Farmer notified instantly.</p>
-                </div>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 flex gap-4 items-start">
+                <div className="bg-blue-100 text-blue-600 p-2 rounded-lg"><span className="material-symbols-outlined">local_shipping</span></div>
+                <div><p className="font-black text-xs uppercase text-slate-900">Direct Tracking</p><p className="text-[10px] text-slate-500 mt-1">Real-time status updates from the producer's farm.</p></div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: ESCROW PAYMENT */}
+          {/* RIGHT: SUMMARY & ESCROW ACTION */}
           <div className="w-full lg:w-5/12">
-            <div className="bg-[#111827] text-white rounded-3xl p-6 md:p-8 shadow-2xl sticky top-24">
+            <div className="bg-slate-900 rounded-[40px] p-8 md:p-10 text-white shadow-2xl sticky top-24">
+              <h2 className="text-xl font-black mb-8 uppercase tracking-widest text-primary">Order Summary</h2>
               
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                <span className="material-symbols-outlined text-primary">lock</span>
-                Escrow Payment
-              </h2>
-
-              <div className="space-y-4 mb-8">
-                <div className="flex justify-between text-sm text-gray-400">
-                  <span>Subtotal</span>
-                  <span className="text-white">₹{subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-400">
-                  <span>Middleman Commission</span>
-                  <span className="text-[#10b981] font-bold">₹0.00 (0%)</span>
-                </div>
-                <div className="h-px bg-gray-800 my-2"></div>
-                <div className="flex justify-between items-end">
-                  <span className="text-sm text-gray-400">Total to Lock in Escrow</span>
-                  <span className="text-3xl font-bold text-white">₹{totalAmount.toLocaleString()}</span>
-                </div>
+              <div className="space-y-4 mb-8 pb-8 border-b border-white/10">
+                <div className="flex justify-between text-sm font-bold text-white/60"><span>Subtotal</span><span>₹{subtotal.toLocaleString()}</span></div>
+                <div className="flex justify-between text-sm font-bold text-white/60"><span>Platform Fee</span><span>₹{platformFee}</span></div>
+                <div className="flex justify-between text-xl font-black text-white pt-2"><span>Total</span><span>₹{totalAmount.toLocaleString()}</span></div>
               </div>
 
-              {/* PAYMENT SIMULATOR BUTTON */}
               {paymentStep === 'idle' && (
                 <button 
                   onClick={handleEscrowPayment}
-                  className="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-1 transition-all flex items-center justify-center gap-2 text-lg group"
+                  disabled={isProcessing}
+                  className="w-full bg-primary text-white py-5 rounded-2xl font-black text-lg hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-3"
                 >
-                  <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
-                  Secure Funds in Escrow
+                  <span className="material-symbols-outlined">lock</span> Initiate Escrow Lock
                 </button>
               )}
 
-              {/* ANIMATED PROCESSING STATES */}
-              {paymentStep !== 'idle' && (
-                <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 text-center animate-in zoom-in-95 duration-300">
-                  
-                  {paymentStep === 'verifying' && (
-                    <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 border-4 border-gray-600 border-t-primary rounded-full animate-spin mb-4"></div>
-                      <p className="font-bold text-white text-lg">Verifying Wallet Funds...</p>
-                      <p className="text-xs text-gray-400 mt-1">Establishing secure connection.</p>
-                    </div>
-                  )}
-
-                  {paymentStep === 'locking' && (
-                    <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 bg-primary/20 text-primary rounded-full flex items-center justify-center mb-4 animate-pulse">
-                        <span className="material-symbols-outlined text-3xl">lock</span>
-                      </div>
-                      <p className="font-bold text-white text-lg">Locking Smart Contract...</p>
-                      <p className="text-xs text-gray-400 mt-1">Generating zero-knowledge proof.</p>
-                    </div>
-                  )}
-
-                  {paymentStep === 'success' && (
-                    <div className="flex flex-col items-center animate-in slide-in-from-bottom-4">
-                      <div className="w-16 h-16 bg-[#10b981] text-white rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(16,185,129,0.5)]">
-                        <span className="material-symbols-outlined text-4xl">check</span>
-                      </div>
-                      <p className="font-bold text-white text-xl">Funds Secured!</p>
-                      <p className="text-sm text-gray-300 mt-2">Farmer has been notified via WhatsApp.</p>
-                      <p className="text-xs text-gray-500 mt-4">Redirecting to marketplace...</p>
-                    </div>
-                  )}
-
+              {paymentStep !== 'idle' && paymentStep !== 'success' && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center animate-pulse">
+                   <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                   <p className="font-black text-sm uppercase tracking-widest text-primary">
+                     {paymentStep === 'verifying' ? 'Verifying Wallet Funds...' : 'Locking Smart Contract...'}
+                   </p>
                 </div>
               )}
 
-              <p className="text-center text-[10px] text-gray-500 mt-6 uppercase tracking-widest font-bold">
-                Protected by Khetify Escrow Infrastructure
-              </p>
+              {paymentStep === 'success' && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center animate-in zoom-in-95">
+                  <span className="material-symbols-outlined text-green-500 text-4xl mb-2">check_circle</span>
+                  <p className="font-black text-sm uppercase tracking-widest text-green-500">Funds Locked Successfully!</p>
+                  <p className="text-[10px] text-white/60 mt-2 italic">Farmer has been notified via WhatsApp. Redirecting...</p>
+                </div>
+              )}
             </div>
           </div>
 
