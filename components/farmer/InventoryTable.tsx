@@ -26,15 +26,30 @@ export default function InventoryTable() {
   useEffect(() => {
     fetchInventory();
   }, []);
-
-  async function fetchInventory() {
+async function fetchInventory() {
     setLoading(true);
+    
+    // 1. Get the securely authenticated user
+    const { data: authData } = await supabase.auth.getUser();
+    
+    if (!authData.user) {
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fetch ONLY the products where farmer_id matches the logged-in user!
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .eq('farmer_id', authData.user.id) // <-- THE CRITICAL FIX FOR ISOLATION
       .order('created_at', { ascending: false });
 
-    if (!error && data) setInventory(data);
+    if (!error && data) {
+      setInventory(data);
+    } else if (error) {
+      console.error("Error fetching inventory:", error);
+    }
+    
     setLoading(false);
   }
 

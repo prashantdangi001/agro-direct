@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 
 export default function RegistrationForm() {
   const router = useRouter();
-  const [role, setRole] = useState<'farmer' | 'buyer'>('farmer');
+  // 1. ADDED 'admin' to the role state
+  const [role, setRole] = useState<'farmer' | 'buyer' | 'admin'>('farmer');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -39,9 +40,26 @@ export default function RegistrationForm() {
       setErrorMsg(error.message);
       setLoading(false);
     } else {
-      // Success! Route them to their respective dashboard
+      
+      // 2. THE FIX: Auto-create the Farm Profile so they don't have to do it in Settings!
+      if (role === 'farmer' && data.user) {
+        const { error: profileError } = await supabase.from('farm_profiles').upsert({
+          id: data.user.id,
+          farm_name: formData.farmName,
+          location: formData.location,
+          about: 'Newly registered farm on AgroDirect.' // Default description
+        });
+
+        if (profileError) {
+          console.error("Failed to auto-create profile:", profileError);
+        }
+      }
+
+      // 3. THE FIX: Route them to their respective dashboard
       if (role === 'farmer') {
         router.push('/farmer');
+      } else if (role === 'admin') {
+        router.push('/admin'); // Route to the admin panel
       } else {
         router.push('/marketplace');
       }
@@ -50,22 +68,36 @@ export default function RegistrationForm() {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      {/* 4. THE FIX: Updated grid to 3 columns to fit the Admin card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        
+        {/* Farmer Card */}
         <div onClick={() => setRole('farmer')} className={`group cursor-pointer p-6 rounded-xl transition-all active:scale-[0.98] flex flex-col items-center text-center ${role === 'farmer' ? 'bg-surface-container-low border-2 border-primary shadow-sm' : 'bg-white border border-outline-variant shadow-sm hover:border-primary/50'}`}>
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${role === 'farmer' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant group-hover:text-primary'}`}>
             <span className="material-symbols-outlined text-4xl">agriculture</span>
           </div>
-          <h3 className="text-2xl font-bold mb-2 text-on-surface">Farmer</h3>
-          <p className="text-sm text-on-surface-variant">List your produce, manage inventory, and reach local wholesale buyers.</p>
+          <h3 className="text-xl font-bold mb-2 text-on-surface">Farmer</h3>
+          <p className="text-xs text-on-surface-variant">List produce, manage inventory, and reach buyers.</p>
         </div>
 
+        {/* Buyer Card */}
         <div onClick={() => setRole('buyer')} className={`group cursor-pointer p-6 rounded-xl transition-all active:scale-[0.98] flex flex-col items-center text-center ${role === 'buyer' ? 'bg-surface-container-low border-2 border-primary shadow-sm' : 'bg-white border border-outline-variant shadow-sm hover:border-primary/50'}`}>
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${role === 'buyer' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant group-hover:text-primary'}`}>
             <span className="material-symbols-outlined text-4xl">shopping_basket</span>
           </div>
-          <h3 className="text-2xl font-bold mb-2 text-on-surface">Buyer</h3>
-          <p className="text-sm text-on-surface-variant">Source fresh local produce at scale. Access high-quality regional crops.</p>
+          <h3 className="text-xl font-bold mb-2 text-on-surface">Buyer</h3>
+          <p className="text-xs text-on-surface-variant">Source fresh local produce at scale securely.</p>
         </div>
+
+        {/* Admin Card */}
+        <div onClick={() => setRole('admin')} className={`group cursor-pointer p-6 rounded-xl transition-all active:scale-[0.98] flex flex-col items-center text-center ${role === 'admin' ? 'bg-surface-container-low border-2 border-primary shadow-sm' : 'bg-white border border-outline-variant shadow-sm hover:border-primary/50'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${role === 'admin' ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant group-hover:text-primary'}`}>
+            <span className="material-symbols-outlined text-4xl">admin_panel_settings</span>
+          </div>
+          <h3 className="text-xl font-bold mb-2 text-on-surface">Admin</h3>
+          <p className="text-xs text-on-surface-variant">Oversee verifications, monitor transactions, and manage the platform.</p>
+        </div>
+
       </div>
 
       <div className="bg-white rounded-xl p-8 border border-outline-variant shadow-sm elevation-1">
