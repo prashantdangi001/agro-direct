@@ -12,17 +12,13 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Language>('en');
-  
-  // THE HYDRATION BUG FIX: Track if the component has mounted on the client
   const [mounted, setMounted] = useState(false); 
 
   useEffect(() => {
-    // 1. Check local storage ONLY after the browser has loaded
     const savedLang = localStorage.getItem('khetify_lang') as Language;
-    if (savedLang === 'en' || savedLang === 'hi') {
+    if (savedLang && ['en', 'hi', 'pa', 'mr'].includes(savedLang)) {
       setLocale(savedLang);
     }
-    // 2. Tell the app it is safe to render
     setMounted(true); 
   }, []);
 
@@ -35,10 +31,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return translations[locale]?.[key] || translations['en'][key] || key;
   };
 
-  // THE HYDRATION BUG FIX: Do not render the UI until language is checked
-  if (!mounted) {
-    return null; // Prevents the ugly UI flashing and React crashes
-  }
+  if (!mounted) return null;
 
   return (
     <LanguageContext.Provider value={{ locale, setLocale: changeLanguage, t }}>
