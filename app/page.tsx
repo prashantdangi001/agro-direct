@@ -1,10 +1,46 @@
-'use client'; // <-- STEP 4: Required for Context
+'use client'; 
 import Link from 'next/link';
 import MarketplaceNavbar from '@/components/layout/MarketplaceNavbar';
-import { useLanguage } from '@/context/LanguageContext'; // <-- STEP 4: Import Context
+import { useLanguage } from '@/context/LanguageContext'; 
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
-  const { t } = useLanguage(); // <-- STEP 4: Initialize translation function
+  const { t } = useLanguage(); 
+  const router = useRouter();
+  
+  // State to hide the page while we check if they are logged in
+  const [isChecking, setIsChecking] = useState(true);
+
+  // ✨ THE HOMEPAGE AUTH GUARD ✨
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // If logged in, teleport them away instantly!
+        const role = session.user.user_metadata?.role;
+        if (role === 'admin') router.push('/admin');
+        else if (role === 'farmer') router.push('/farmer');
+        else router.push('/marketplace');
+      } else {
+        // If NOT logged in, stop checking and show the landing page
+        setIsChecking(false);
+      }
+    };
+    checkSession();
+  }, [router]);
+
+  // Show a smooth loading spinner while making the routing decision
+  if (isChecking) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
+        <p className="text-on-surface-variant font-bold animate-pulse">Loading Khetify Ecosystem...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-background min-h-screen flex flex-col font-sans transition-colors duration-300">
@@ -17,6 +53,8 @@ export default function LandingPage() {
           <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-[400px] h-[400px] bg-[#D97706]/5 rounded-full blur-3xl"></div>
 
           <div className="max-w-[1280px] mx-auto px-4 md:px-12 relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            
+            {/* LEFT TEXT COLUMN */}
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="inline-block bg-[#D97706]/10 border border-[#D97706]/20 text-[#904d00] font-bold px-4 py-1.5 rounded-full text-sm uppercase tracking-wider">
                 {t('hero_badge')}
@@ -27,19 +65,37 @@ export default function LandingPage() {
               <p className="text-lg md:text-xl text-on-surface-variant max-w-lg leading-relaxed transition-all">
                 {t('hero_subtitle')}
               </p>
+              
+              {/* MAIN CTA BUTTONS */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Link href="/marketplace" className="bg-primary text-white px-8 py-4 rounded-xl font-bold text-lg shadow-md hover:brightness-110 hover:-translate-y-1 transition-all text-center flex items-center justify-center gap-2">
                   <span className="material-symbols-outlined">shopping_basket</span>
                   {t('btn_shop')}
                 </Link>
-                <Link href="/login" className="bg-white text-on-surface border-2 border-outline-variant px-8 py-4 rounded-xl font-bold text-lg shadow-sm hover:border-primary hover:text-primary hover:-translate-y-1 transition-all text-center flex items-center justify-center gap-2">
+                <Link href="/register" className="bg-white text-on-surface border-2 border-outline-variant px-8 py-4 rounded-xl font-bold text-lg shadow-sm hover:border-primary hover:text-primary hover:-translate-y-1 transition-all text-center flex items-center justify-center gap-2">
                   <span className="material-symbols-outlined">agriculture</span>
                   {t('btn_farmer')}
                 </Link>
               </div>
+
+              {/* ADMIN CARD */}
+              <div className="pt-6 mt-4 border-t border-outline-variant/50 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+                <div className="inline-flex items-center gap-4 p-2 pr-6 bg-surface-container-lowest border border-outline-variant rounded-full shadow-sm hover:border-gray-400 hover:shadow-md transition-all group">
+                  <div className="w-10 h-10 bg-[#111827] rounded-full flex items-center justify-center text-white group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-lg">shield_person</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Authorized Personnel</span>
+                    <Link href="/login" className="text-sm font-bold text-[#111827] hover:text-primary transition-colors flex items-center gap-1">
+                      Admin Portal Login <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
-            {/* Hero Image */}
+            {/* RIGHT HERO IMAGE */}
             <div className="relative animate-in fade-in slide-in-from-right-8 duration-700 delay-200">
               <div className="w-full aspect-[4/3] bg-surface-container rounded-2xl border-4 border-white shadow-2xl overflow-hidden relative">
                 <img 
