@@ -6,108 +6,137 @@ export default function OrderHistoryTable() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
   const fetchOrders = async () => {
     setLoading(true);
+    // 1. Security Check: Get the logged-in farmer
     const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return;
+    
+    if (authData.user) {
+      // 2. Fetch ONLY orders belonging to this farmer
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('farmer_id', authData.user.id)
+        .order('created_at', { ascending: false });
 
-    // FETCH ISOLATED ORDERS: Only get orders that belong to this farmer!
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('farmer_id', authData.user.id)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setOrders(data);
+      if (!error && data) {
+        setOrders(data);
+      }
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchOrders();
+  // 3. THE MAGIC FIX: Update the database when the farmer changes the status
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    // Optimistic UI Update (Makes it feel instant for the farmer)
+    setOrders(orders.map(order => 
+      order.id === orderId ? { ...order, status: newStatus } : order
+    ));
 
-    // Listen for new orders or status updates in real-time
-    const channel = supabase.channel('order-history-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchOrders();
-      })
-      .subscribe();
+    // Actually update the database securely
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
 
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  // Allow the farmer to update the order status
-  const handleUpdateStatus = async (orderId: string, currentStatus: string) => {
-    let newStatus = 'Processing';
-    if (currentStatus === 'Processing') newStatus = 'Shipped';
-    else if (currentStatus === 'Shipped') newStatus = 'Delivered';
-    else return; // If delivered, do nothing
-
-    await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    if (error) {
+      console.error("Status update failed:", error);
+      alert("Failed to update order status.");
+      fetchOrders(); // Revert back if it fails
+    }
   };
 
-  if (loading) {
-    return <div className="p-12 flex justify-center"><div className="w-10 h-10 border-4 border-surface-container-high border-t-primary rounded-full animate-spin"></div></div>;
-  }
-
-  if (orders.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-outline-variant p-12 text-center elevation-1">
-        <span className="material-symbols-outlined text-6xl text-outline mb-4">receipt_long</span>
-        <h3 className="text-xl font-bold text-on-surface mb-2">No Orders Yet</h3>
-        <p className="text-on-surface-variant">When buyers purchase your produce, their orders will appear here.</p>
-      </div>
-    );
-  }
+  // Helper to color-code the dropdown based on current status
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'Processing': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Harvested': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'Shipped': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'Delivered': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
 
   return (
-    <div className="bg-white rounded-xl border border-outline-variant elevation-1 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+    <div className="bg-white rounded-xl border border-outline-variant overflow-hidden shadow-sm elevation-1">
+      <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
+        <h2 className="font-bold text-lg text-on-surface flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">receipt_long</span>
+          Live Order Management
+        </h2>
+        <button onClick={fetchOrders} className="text-sm font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+          <span className="material-symbols-outlined text-[16px]">refresh</span> Refresh
+        </button>
+      </div>
+
+      <div className="overflow-x-auto hide-scrollbar">
+        <table className="w-full text-left min-w-[800px]">
           <thead>
-            <tr className="bg-surface-container-lowest border-b border-outline-variant">
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Order ID</th>
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Date</th>
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Buyer</th>
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Total Value</th>
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Status</th>
-              <th className="py-4 px-6 text-xs font-bold uppercase tracking-wider text-right text-on-surface-variant">Action</th>
+            <tr className="border-b border-outline-variant bg-surface-container-low">
+              <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Order ID</th>
+              <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Buyer Details</th>
+              <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Delivery Address</th>
+              <th className="py-3 px-6 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Total Value</th>
+              <th className="py-3 px-6 text-right text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Traceability Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-outline-variant">
-            {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-surface-bright transition-colors">
-                <td className="py-4 px-6 font-medium text-sm text-on-surface">#{order.id.split('-')[0]}</td>
-                <td className="py-4 px-6 text-sm text-on-surface-variant">{new Date(order.created_at).toLocaleDateString()}</td>
-                <td className="py-4 px-6">
-                  <p className="text-sm font-bold text-on-surface">{order.buyer_name}</p>
-                  <p className="text-xs text-on-surface-variant truncate max-w-[150px]">{order.delivery_address}</p>
-                </td>
-                <td className="py-4 px-6 text-sm font-bold text-primary">INR {Number(order.total_amount).toFixed(2)}</td>
-                <td className="py-4 px-6">
-                  <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                    order.status === 'Delivered' ? 'bg-[#006c4a]/10 text-[#006c4a] border-[#006c4a]/20' :
-                    order.status === 'Shipped' ? 'bg-[#005fb8]/10 text-[#005fb8] border-[#005fb8]/20' :
-                    'bg-[#fe932c]/10 text-[#904d00] border-[#fe932c]/20'
-                  }`}>
-                    {order.status}
-                  </span>
-                </td>
-                <td className="py-4 px-6 text-right">
-                  {order.status !== 'Delivered' ? (
-                    <button 
-                      onClick={() => handleUpdateStatus(order.id, order.status)}
-                      className="bg-primary/10 text-primary hover:bg-primary hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                    >
-                      Mark {order.status === 'Processing' ? 'Shipped' : 'Delivered'}
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-outline">Completed</span>
-                  )}
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="py-12 text-center">
+                  <div className="w-8 h-8 border-4 border-surface-container-high border-t-primary rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-on-surface-variant font-medium text-sm">Syncing orders...</p>
                 </td>
               </tr>
-            ))}
+            ) : orders.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-12 text-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-4xl mb-2 opacity-50">inbox</span>
+                  <p className="font-bold">No orders received yet.</p>
+                </td>
+              </tr>
+            ) : (
+              orders.map((order) => (
+                <tr key={order.id} className="border-b border-outline-variant hover:bg-surface-bright transition-colors group">
+                  <td className="py-4 px-6">
+                    <p className="font-bold text-on-surface">ORD-{order.id.substring(0, 6).toUpperCase()}</p>
+                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </p>
+                  </td>
+                  <td className="py-4 px-6">
+                    <p className="font-bold text-on-surface text-sm">{order.buyer_name}</p>
+                    <p className="text-xs text-on-surface-variant">{order.buyer_email}</p>
+                  </td>
+                  <td className="py-4 px-6">
+                    <p className="text-sm text-on-surface-variant max-w-[200px] truncate" title={order.delivery_address}>
+                      {order.delivery_address}
+                    </p>
+                    <p className="text-[10px] font-bold text-primary uppercase mt-1">{order.payment_method}</p>
+                  </td>
+                  <td className="py-4 px-6 font-bold text-primary">
+                    INR {Number(order.total_amount).toLocaleString()}
+                  </td>
+                  <td className="py-4 px-6 text-right">
+                    {/* THE INTERACTIVE STATUS DROPDOWN */}
+                    <select 
+                      value={order.status || 'Processing'}
+                      onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                      className={`text-xs font-bold border rounded-lg px-3 py-1.5 outline-none cursor-pointer appearance-none text-center ${getStatusColor(order.status || 'Processing')}`}
+                    >
+                      <option value="Processing">Processing</option>
+                      <option value="Harvested">Harvested</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="Delivered">Delivered</option>
+                    </select>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
