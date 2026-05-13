@@ -1,5 +1,6 @@
 'use client';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 export default function MarketplaceSidebar() {
   const router = useRouter();
@@ -8,6 +9,15 @@ export default function MarketplaceSidebar() {
   // Read current state from the URL (Defaults to 'All Produce')
   const currentTab = searchParams.get('tab') || 'All Produce';
   const selectedCategories = searchParams.getAll('category');
+  
+  // Distance Slider State
+  const urlDistance = searchParams.get('distance') || '25';
+  const [distance, setDistance] = useState(urlDistance);
+
+  // Sync state if URL changes externally
+  useEffect(() => {
+    setDistance(searchParams.get('distance') || '25');
+  }, [searchParams]);
 
   // Handle Tab Clicks
   const handleTabChange = (tabName: string) => {
@@ -28,6 +38,17 @@ export default function MarketplaceSidebar() {
       params.append('category', cat);
     }
     
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
+  // Handle Distance Slider (Updates local state instantly, pushes to URL on mouse release)
+  const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDistance(e.target.value);
+  };
+
+  const handleDistanceCommit = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('distance', distance.toString());
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
@@ -80,16 +101,31 @@ export default function MarketplaceSidebar() {
           </div>
         </div>
 
+        {/* INTERACTIVE DISTANCE SLIDER */}
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-sm font-bold text-on-surface">Distance from Me</p>
-            <span className="text-xs font-bold text-primary">25 km</span>
+            <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{distance} km</span>
           </div>
-          <input type="range" className="w-full h-1.5 bg-outline-variant rounded-lg appearance-none cursor-pointer accent-primary" />
+          <input 
+            type="range" 
+            min="5" 
+            max="100" 
+            step="5"
+            value={distance}
+            onChange={handleDistanceChange}
+            onMouseUp={handleDistanceCommit}
+            onTouchEnd={handleDistanceCommit}
+            className="w-full h-1.5 bg-outline-variant rounded-lg appearance-none cursor-pointer accent-primary" 
+          />
         </div>
       </div>
 
-      <button className="mt-auto bg-primary text-white py-3 rounded-lg font-bold text-sm hover:brightness-110 active:scale-95 transition-all shadow-sm">
+      {/* COMING SOON BUTTON */}
+      <button 
+        onClick={() => alert("🚀 Seller Onboarding is currently paused for the Hackathon Demo. Feature coming in v2.0!")}
+        className="mt-auto bg-primary text-white py-3 rounded-lg font-bold text-sm hover:brightness-110 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-2"
+      >
         Become a Seller
       </button>
     </aside>
