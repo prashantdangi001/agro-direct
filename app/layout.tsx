@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Khetify | Soil to Storefront",
-  description: "Connecting regional farmers directly to wholesale buyers.",
+  title: "Khetify | AgroDirect Platform",
+  description: "The Zero-Commission Agri-Marketplace connecting farmers to consumers.",
 };
 
 export default function RootLayout({
@@ -18,13 +19,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        {/* THE FIX FOR MISSING ICONS: Imports Google Material Symbols */}
+        <link 
+          rel="stylesheet" 
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" 
+        />
       </head>
-      <body className={`${inter.className} bg-background text-on-background antialiased`}>
-        {/* THE FIX: Wrap children in the CartProvider */}
-        <CartProvider>
-          {children}
-        </CartProvider>
+      <body className={inter.className}>
+        <LanguageProvider>
+          <CartProvider>
+            {children}
+          </CartProvider>
+        </LanguageProvider>
       </body>
     </html>
   );
