@@ -8,15 +8,33 @@ import { useCart } from '@/context/CartContext';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, getCartTotal, clearCart } = useCart(); 
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart } = useCart(); 
   const [user, setUser] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [paymentMethod, setPaymentMethod] = useState<'escrow' | 'cod'>('escrow');
   const [paymentStep, setPaymentStep] = useState<'idle' | 'verifying' | 'locking' | 'success'>('idle');
 
-  // Unified Khetify Financials
+  // ✨ NEW: Strict Delivery State ✨
+  const [delivery, setDelivery] = useState({
+    receiverName: '',
+    mobileNo: '',
+    altMobileNo: '',
+    fullAddress: '',
+    city: '',
+    pincode: ''
+  });
+
   const subtotal = getCartTotal();
   const platformFee = 0; 
   const totalAmount = subtotal + platformFee;
+
+  // Validation Check: Are all required fields filled?
+  const isDeliveryValid = delivery.receiverName.trim() !== '' && 
+                          delivery.mobileNo.trim() !== '' && 
+                          delivery.fullAddress.trim() !== '' && 
+                          delivery.city.trim() !== '' && 
+                          delivery.pincode.trim() !== '';
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -25,71 +43,84 @@ export default function CheckoutPage() {
         router.push('/login');
       } else {
         setUser(session.user);
+        // Pre-fill what we know from their registration
+        setDelivery(prev => ({
+          ...prev,
+          receiverName: session.user.user_metadata?.full_name || '',
+          mobileNo: session.user.user_metadata?.phone || ''
+        }));
       }
     };
     fetchUser();
   }, [router]);
 
-  const handleEscrowPayment = async () => {
-    if (!user || cart.length === 0) return;
+  const handleCheckout = async () => {
+    if (!user || cart.length === 0 || !isDeliveryValid) return;
     setIsProcessing(true);
     
-    // 1. UI Simulation: Cryptographic Verification
-    setPaymentStep('verifying');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // 2. UI Simulation: Smart Contract Execution
-    setPaymentStep('locking');
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (paymentMethod === 'escrow') {
+      setPaymentStep('verifying');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setPaymentStep('locking');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    } else {
+      setPaymentStep('verifying'); 
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     try {
       const primaryItem = cart[0];
       
-      // 3. Database: Create the real-time Order Record
+      // ✨ Format the complete delivery address string
+      const completeAddress = `${delivery.receiverName} | Ph: ${delivery.mobileNo} ${delivery.altMobileNo ? `(Alt: ${delivery.altMobileNo})` : ''} | ${delivery.fullAddress}, ${delivery.city} - ${delivery.pincode}`;
+      
       const { error: dbError } = await supabase.from('orders').insert({
         buyer_id: user.id,
         farmer_id: primaryItem.farmerId, 
         farm_name: primaryItem.farm,
         items: cart, 
         total_amount: totalAmount,
-        status: 'locked'
+        status: 'locked',
+        payment_method: paymentMethod,
+        delivery_address: completeAddress // Save the strict address!
       });
 
       if (dbError) throw dbError;
 
-      // 4. REAL-TIME WHATSAPP INTEGRATION
-      try {
-        // Fetch the farmer's real-time phone number from the registry
-        const { data: farmProfile } = await supabase
-          .from('farm_profiles')
-          .select('contact_number')
-          .eq('id', primaryItem.farmerId)
-          .single();
+      const methodText = paymentMethod === 'escrow' ? 'Escrow Wallet (Pre-Paid)' : 'Cash on Delivery (COD)';
 
+      // 🚀 ALERT THE FARMER (NOW WITH DELIVERY DETAILS) 🚀
+      try {
+        const { data: farmProfile } = await supabase.from('farm_profiles').select('contact_number').eq('id', primaryItem.farmerId).single();
         const producerPhone = farmProfile?.contact_number; 
         
         if (producerPhone) {
           let cleanPhone = producerPhone.replace(/\D/g, ''); 
           if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
 
-          const waMessage = `🟢 *Khetify Escrow Alert*\n\nGreat news! INR ${totalAmount.toLocaleString()} has been securely locked in Escrow by a buyer.\n\n*Items to Dispatch:*\n${cart.map(i => `- ${i.qty}x ${i.name}`).join('\n')}\n\nPlease update your dashboard to mark this order as 'Shipped'.`;
+          const farmerMessage = `🟢 *Khetify Order Alert*\n\nNew order received for INR ${totalAmount.toLocaleString()}!\n\n*Payment Mode:* ${methodText}\n\n*🚚 Deliver To:*\n${delivery.receiverName}\n${delivery.fullAddress}, ${delivery.city} - ${delivery.pincode}\n📞 ${delivery.mobileNo}\n${delivery.altMobileNo ? `📞 Alt: ${delivery.altMobileNo}` : ''}\n\n*Items to Dispatch:*\n${cart.map((i: any) => `- ${i.qty}x ${i.name}`).join('\n')}\n\nPlease update your dashboard to mark this order as 'Shipped'.`;
 
-          await fetch('/api/whatsapp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: cleanPhone, message: waMessage })
-          });
+          fetch('/api/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: cleanPhone, message: farmerMessage }) });
         }
-      } catch (waErr) {
-        console.error("Notification Engine Error:", waErr);
-      }
+      } catch (waErr) { console.error(waErr); }
 
-      // 5. Completion State
+      // ALERT THE BUYER
+      try {
+        const buyerPhone = delivery.mobileNo || user.user_metadata?.phone; 
+        const buyerName = delivery.receiverName || user.user_metadata?.full_name || 'Buyer';
+        
+        if (buyerPhone) {
+          let cleanPhone = buyerPhone.replace(/\D/g, ''); 
+          if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+
+          const buyerMessage = `🛒 *Khetify Order Confirmed*\n\nThank you, ${buyerName}!\nYour order for INR ${totalAmount.toLocaleString()} has been placed.\n\n*Payment Mode:* ${methodText}\n\n*Order Summary:*\n${cart.map((i: any) => `- ${i.qty}x ${i.name}`).join('\n')}\n\nIt will be delivered to:\n${delivery.fullAddress}, ${delivery.city}\n\nYou will be notified when ${primaryItem.farm} dispatches the produce.`;
+
+          fetch('/api/whatsapp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: cleanPhone, message: buyerMessage }) });
+        }
+      } catch (buyerWaErr) { console.error(buyerWaErr); }
+
       setPaymentStep('success');
-      setTimeout(() => {
-        clearCart();
-        router.push('/marketplace'); 
-      }, 3000);
+      setTimeout(() => { clearCart(); router.push('/buyer/orders'); }, 3000); 
 
     } catch (error: any) {
       alert("Checkout sync failed: " + error.message);
@@ -121,7 +152,7 @@ export default function CheckoutPage() {
         
         <header className="mb-12">
           <Link href="/cart" className="inline-flex items-center gap-2 text-sm font-black text-on-surface-variant hover:text-primary transition-all group">
-            <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Review Cart
+            <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Return to Cart
           </Link>
           <h1 className="text-5xl font-black text-on-surface mt-4 tracking-tighter uppercase italic">Secure Checkout</h1>
           <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mt-2">Verified Peer-to-Peer Transaction</p>
@@ -129,115 +160,193 @@ export default function CheckoutPage() {
 
         <div className="flex flex-col lg:flex-row gap-12 items-start">
           
-          {/* LEFT COLUMN: ORDER DETAILS */}
+          {/* LEFT COLUMN */}
           <div className="w-full lg:w-7/12 space-y-8">
+            
+            {/* 1. ORDER DETAILS */}
             <div className="bg-white border border-outline-variant rounded-[40px] p-10 shadow-sm">
-              <h2 className="text-2xl font-black text-on-surface mb-10 flex items-center gap-3">
+              <h2 className="text-2xl font-black text-on-surface mb-8 flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">inventory_2</span>
-                Items for Escrow
+                Order Items
               </h2>
 
-              <div className="space-y-8">
-                {cart.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-6 border-b border-outline-variant/30 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-6">
-                      <div className="w-20 h-20 bg-surface-container-low rounded-3xl overflow-hidden border border-outline-variant shadow-inner">
+              <div className="space-y-6">
+                {cart.map((item: any, idx: number) => (
+                  <div key={idx} className="flex flex-col md:flex-row md:items-center justify-between py-6 border-b border-outline-variant/30 last:border-0 last:pb-0 gap-6">
+                    <div className="flex items-center gap-6 w-full md:w-auto">
+                      <div className="w-20 h-20 bg-surface-container-low rounded-3xl overflow-hidden border border-outline-variant shadow-inner shrink-0">
                         <img src={item.image} className="w-full h-full object-cover" alt={item.name} />
                       </div>
                       <div>
                         <h3 className="font-black text-xl text-on-surface leading-tight">{item.name}</h3>
                         <p className="text-xs font-bold text-primary uppercase tracking-widest mt-1">{item.farm}</p>
-                        <p className="text-[11px] font-black text-on-surface-variant mt-2">QTY: {item.qty} Unit(s)</p>
+                        
+                        <div className="flex items-center gap-2 mt-3 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant w-fit shadow-sm">
+                          <button onClick={() => updateQuantity(item.id, item.qty - 1)} className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-on-surface-variant hover:text-primary hover:shadow-md transition-all active:scale-95">
+                            <span className="material-symbols-outlined text-[16px]">remove</span>
+                          </button>
+                          <span className="w-8 text-center font-black text-on-surface text-sm">{item.qty}</span>
+                          <button onClick={() => updateQuantity(item.id, item.qty + 1)} className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-on-surface-variant hover:text-primary hover:shadow-md transition-all active:scale-95">
+                            <span className="material-symbols-outlined text-[16px]">add</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex items-center justify-between md:block w-full md:w-auto">
                       <p className="font-black text-2xl text-on-surface tracking-tighter">₹{(item.price * item.qty).toLocaleString()}</p>
+                      <button onClick={() => removeFromCart(item.id)} className="md:hidden text-error bg-error/10 p-2 rounded-xl">
+                         <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* TRUST GRID */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white border border-outline-variant rounded-[32px] p-8 flex gap-5 items-start shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0">
-                  <span className="material-symbols-outlined">verified_user</span>
+            {/* ✨ 2. STRICT DELIVERY DETAILS FORM ✨ */}
+            <div className="bg-white border border-outline-variant rounded-[40px] p-10 shadow-sm">
+              <h2 className="text-2xl font-black text-on-surface mb-8 flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">local_shipping</span>
+                Delivery Details
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Receiver's Full Name *</label>
+                  <input required value={delivery.receiverName} onChange={e => setDelivery({...delivery, receiverName: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="E.g. Prashant Dangi" />
                 </div>
-                <div>
-                  <p className="font-black text-xs uppercase tracking-widest text-on-surface">Escrow Lock</p>
-                  <p className="text-[11px] text-on-surface-variant mt-2 font-medium italic leading-relaxed">Funds are cryptographically held until you confirm receipt of fresh produce.</p>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Mobile No. (WhatsApp) *</label>
+                  <input required type="tel" value={delivery.mobileNo} onChange={e => setDelivery({...delivery, mobileNo: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="91XXXXXXXXXX" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Alternative Mobile No.</label>
+                  <input type="tel" value={delivery.altMobileNo} onChange={e => setDelivery({...delivery, altMobileNo: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="Optional" />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Complete Address *</label>
+                  <textarea required rows={3} value={delivery.fullAddress} onChange={e => setDelivery({...delivery, fullAddress: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold resize-none" placeholder="House No, Street, Landmark, Village..." />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">City / District *</label>
+                  <input required value={delivery.city} onChange={e => setDelivery({...delivery, city: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="E.g. Indore" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">PIN Code *</label>
+                  <input required value={delivery.pincode} onChange={e => setDelivery({...delivery, pincode: e.target.value})} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="452001" />
                 </div>
               </div>
-              <div className="bg-white border border-outline-variant rounded-[32px] p-8 flex gap-5 items-start shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0">
-                  <span className="material-symbols-outlined">hub</span>
+            </div>
+
+            {/* 3. PAYMENT METHOD SELECTOR */}
+            <div className="bg-white border border-outline-variant rounded-[40px] p-10 shadow-sm">
+               <h2 className="text-2xl font-black text-on-surface mb-8 flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
+                Payment Method
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div onClick={() => setPaymentMethod('escrow')} className={`cursor-pointer p-6 rounded-[24px] border-2 transition-all ${paymentMethod === 'escrow' ? 'border-primary bg-primary/5 shadow-md' : 'border-outline-variant hover:border-primary/50 bg-surface-container-lowest'}`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${paymentMethod === 'escrow' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-surface-container-low text-on-surface-variant'}`}>
+                      <span className="material-symbols-outlined">lock</span>
+                    </div>
+                    {paymentMethod === 'escrow' && <span className="material-symbols-outlined text-primary">check_circle</span>}
+                  </div>
+                  <h3 className="font-black text-on-surface text-lg">Escrow Wallet</h3>
+                  <p className="text-[11px] font-bold text-on-surface-variant mt-2 leading-relaxed">Recommended. Funds are securely locked and only released upon successful delivery.</p>
                 </div>
-                <div>
-                  <p className="font-black text-xs uppercase tracking-widest text-on-surface">Zero Commission</p>
-                  <p className="text-[11px] text-on-surface-variant mt-2 font-medium italic leading-relaxed">No middleman fees. 100% of your payment reaches the local farmer directly.</p>
+
+                <div onClick={() => setPaymentMethod('cod')} className={`cursor-pointer p-6 rounded-[24px] border-2 transition-all ${paymentMethod === 'cod' ? 'border-primary bg-primary/5 shadow-md' : 'border-outline-variant hover:border-primary/50 bg-surface-container-lowest'}`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-surface-container-low text-on-surface-variant'}`}>
+                      <span className="material-symbols-outlined">payments</span>
+                    </div>
+                    {paymentMethod === 'cod' && <span className="material-symbols-outlined text-primary">check_circle</span>}
+                  </div>
+                  <h3 className="font-black text-on-surface text-lg">Cash on Delivery</h3>
+                  <p className="text-[11px] font-bold text-on-surface-variant mt-2 leading-relaxed">Pay with cash or UPI directly to the farmer when your produce arrives.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: PAYMENT SUMMARY */}
+          {/* RIGHT COLUMN: FINANCIAL SUMMARY */}
           <div className="w-full lg:w-5/12">
-            <div className="bg-on-surface rounded-[48px] p-10 md:p-14 text-white shadow-2xl sticky top-24">
-              <h2 className="text-xl font-black mb-10 uppercase tracking-[0.3em] text-primary">Financial Summary</h2>
+            <div className="bg-white border border-outline-variant rounded-[48px] p-10 md:p-12 shadow-xl sticky top-24">
+              <h2 className="text-xl font-black mb-8 uppercase tracking-widest text-on-surface border-b border-outline-variant/50 pb-6 flex items-center justify-between">
+                Financial Summary
+                <span className="material-symbols-outlined text-on-surface-variant">receipt_long</span>
+              </h2>
               
-              <div className="space-y-6 mb-10 pb-10 border-b border-white/10">
-                <div className="flex justify-between items-center text-white/50 font-bold">
+              <div className="space-y-5 mb-8">
+                <div className="flex justify-between items-center text-on-surface-variant font-bold">
                   <span>Cart Subtotal</span>
-                  <span className="text-white">₹{subtotal.toLocaleString()}</span>
+                  <span className="text-on-surface font-black">₹{subtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center text-white/50 font-bold">
-                  <span>Escrow & Platform Fee</span>
-                  <span className="text-primary font-black uppercase tracking-widest text-[10px]">₹0 (Limited Offer)</span>
+                <div className="flex justify-between items-center text-on-surface-variant font-bold">
+                  <span>Logistics & Escrow Fee</span>
+                  <span className="text-primary font-black uppercase tracking-widest text-[10px] bg-primary/10 px-2 py-1 rounded-md border border-primary/20">₹0 (Limited Offer)</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-end mb-12">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Total Settlement</span>
-                <span className="text-5xl font-black text-white tracking-tighter">₹{totalAmount.toLocaleString()}</span>
+              <div className="bg-surface-container-lowest border-2 border-outline-variant rounded-[32px] p-8 mb-8 transition-all duration-300">
+                <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant block mb-1">
+                  {paymentMethod === 'escrow' ? 'Total to Lock' : 'Total Payable on Delivery'}
+                </span>
+                <span className="text-5xl font-black text-on-surface tracking-tighter transition-all duration-300">₹{totalAmount.toLocaleString()}</span>
               </div>
 
+              {/* ✨ DYNAMIC SUBMIT BUTTON WITH VALIDATION LOCK ✨ */}
               {paymentStep === 'idle' && (
                 <button 
-                  onClick={handleEscrowPayment}
-                  disabled={isProcessing}
-                  className="w-full bg-primary text-white py-6 rounded-3xl font-black text-xl hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-primary/30 flex items-center justify-center gap-3 group"
+                  onClick={handleCheckout}
+                  disabled={isProcessing || !isDeliveryValid}
+                  className={`w-full py-6 rounded-3xl font-black text-xl text-white transition-all shadow-xl flex items-center justify-center gap-3 group hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${
+                    !isDeliveryValid ? 'bg-surface-container-highest text-on-surface-variant shadow-none' : 
+                    paymentMethod === 'escrow' ? 'bg-primary shadow-primary/30 hover:brightness-110' : 'bg-[#D97706] shadow-[#D97706]/30 hover:brightness-110'
+                  }`}
                 >
-                  <span className="material-symbols-outlined group-hover:rotate-12 transition-transform">lock</span>
-                  Lock Escrow Funds
+                  {!isDeliveryValid ? (
+                    <><span className="material-symbols-outlined">edit_location</span> Fill Delivery Details</>
+                  ) : paymentMethod === 'escrow' ? (
+                    <><span className="material-symbols-outlined group-hover:rotate-12 transition-transform">lock</span> Lock Escrow Funds</>
+                  ) : (
+                    <><span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">local_shipping</span> Confirm COD Order</>
+                  )}
                 </button>
               )}
 
-              {/* PROGRESS STEPS */}
+              {/* DYNAMIC PROGRESS STEPS */}
               {paymentStep !== 'idle' && paymentStep !== 'success' && (
-                <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center animate-in zoom-in-95">
-                   <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-                   <p className="font-black text-sm uppercase tracking-[0.2em] text-primary">
-                     {paymentStep === 'verifying' ? 'Verifying Digital Wallet...' : 'Locking Smart Contract...'}
+                <div className="bg-surface-container-lowest border border-outline-variant rounded-3xl p-8 text-center animate-in zoom-in-95">
+                   <div className={`w-10 h-10 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-6 ${paymentMethod === 'escrow' ? 'border-primary' : 'border-[#D97706]'}`}></div>
+                   <p className={`font-black text-sm uppercase tracking-[0.2em] ${paymentMethod === 'escrow' ? 'text-primary' : 'text-[#D97706]'}`}>
+                     {paymentMethod === 'escrow' && paymentStep === 'verifying' ? 'Verifying Digital Wallet...' : 
+                      paymentMethod === 'escrow' && paymentStep === 'locking' ? 'Locking Smart Contract...' : 
+                      'Processing Order...'}
                    </p>
-                   <p className="text-[10px] text-white/40 mt-2 italic font-medium">Securing transaction on the Khetify network.</p>
+                   <p className="text-[10px] text-on-surface-variant mt-2 italic font-medium">Securing transaction on the Khetify network.</p>
                 </div>
               )}
 
               {/* SUCCESS STATE */}
               {paymentStep === 'success' && (
-                <div className="bg-primary/10 border border-primary/20 rounded-3xl p-8 text-center animate-in zoom-in-95">
-                  <span className="material-symbols-outlined text-primary text-5xl mb-4">check_circle</span>
-                  <p className="font-black text-sm uppercase tracking-[0.2em] text-primary">Escrow Secured</p>
-                  <p className="text-[10px] text-white/60 mt-3 italic font-medium leading-relaxed px-4">
-                    Producer notified via WhatsApp. Funds are now safely locked.
+                <div className="bg-[#10b981]/10 border border-[#10b981]/20 rounded-3xl p-8 text-center animate-in zoom-in-95">
+                  <span className="material-symbols-outlined text-[#10b981] text-5xl mb-4">check_circle</span>
+                  <p className="font-black text-sm uppercase tracking-[0.2em] text-[#10b981]">
+                    {paymentMethod === 'escrow' ? 'Escrow Secured' : 'Order Confirmed'}
+                  </p>
+                  <p className="text-[10px] text-on-surface-variant mt-3 italic font-bold leading-relaxed px-4">
+                    Both parties have been notified via WhatsApp.
                   </p>
                 </div>
               )}
-
-              <div className="mt-12 text-center">
-                 <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Encrypted by Khetify v3.2</p>
-              </div>
             </div>
           </div>
 

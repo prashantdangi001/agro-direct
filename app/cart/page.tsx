@@ -10,14 +10,14 @@ export default function CartPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="bg-[#F8FAFC] min-h-screen flex flex-col font-sans">
+      <div className="bg-[#F8FAF9] min-h-screen flex flex-col font-sans">
         <MarketplaceNavbar />
         <main className="flex-1 flex flex-col items-center justify-center p-12 animate-in fade-in duration-500">
-          <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6">
-            <span className="material-symbols-outlined text-5xl text-slate-300">shopping_cart_off</span>
+          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+            <span className="material-symbols-outlined text-5xl text-primary">shopping_cart_off</span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Your cart is empty</h1>
-          <p className="text-slate-500 mb-8 font-medium italic">Discover fresh produce from local farmers.</p>
+          <h1 className="text-3xl font-black text-on-surface mb-2 tracking-tight">Your cart is empty</h1>
+          <p className="text-on-surface-variant mb-8 font-medium italic">Discover fresh produce from local farmers.</p>
           <Link href="/marketplace" className="bg-primary text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-primary/30 transition-transform hover:scale-105">
             Back to Marketplace
           </Link>
@@ -27,71 +27,76 @@ export default function CartPage() {
   }
 
   return (
-    <div className="bg-[#F8FAFC] min-h-screen flex flex-col font-sans">
+    <div className="bg-[#F8FAF9] min-h-screen flex flex-col font-sans">
       <MarketplaceNavbar />
 
-      <main className="flex-1 max-w-[1280px] w-full mx-auto px-4 md:px-12 py-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <main className="flex-1 max-w-[1280px] w-full mx-auto px-6 md:px-12 py-12 animate-in fade-in duration-700">
         
-        <div className="mb-10">
-          <Link href="/marketplace" className="inline-flex items-center gap-2 text-sm font-black text-slate-400 hover:text-primary transition-colors group">
+        <header className="mb-12">
+          <Link href="/marketplace" className="inline-flex items-center gap-2 text-sm font-black text-on-surface-variant hover:text-primary transition-all group">
             <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Continue Shopping
           </Link>
           <div className="flex items-center justify-between mt-4">
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">My Shopping Cart</h1>
-            <span className="bg-primary/10 text-primary px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border border-primary/20">
+            <h1 className="text-5xl font-black text-on-surface tracking-tighter uppercase italic">Shopping Cart</h1>
+            <span className="bg-primary/10 text-primary px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-primary/20">
               {getCartCount()} {getCartCount() === 1 ? 'Item' : 'Items'}
             </span>
           </div>
-        </div>
+        </header>
 
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
+        <div className="flex flex-col lg:flex-row gap-12">
           
           {/* LEFT: CART ITEMS LIST */}
           <div className="w-full lg:w-7/12 space-y-6">
-            <div className="bg-white border border-slate-200 rounded-[40px] overflow-hidden shadow-sm">
-              <div className="divide-y divide-slate-100">
+            <div className="bg-white border border-outline-variant rounded-[40px] overflow-hidden shadow-sm">
+              <div className="divide-y divide-outline-variant/50">
                 {cart.map((item) => (
-                  <div key={item.id} className="p-8 flex flex-col md:flex-row items-center gap-6 group hover:bg-slate-50/50 transition-colors">
+                  <div key={item.id} className="p-8 flex flex-col md:flex-row items-center gap-6 group hover:bg-surface-container-lowest transition-colors">
                     
                     {/* Item Image */}
-                    <div className="w-28 h-28 bg-slate-50 rounded-[28px] overflow-hidden border border-slate-100 shadow-inner shrink-0">
+                    <div className="w-28 h-28 bg-surface-container-low rounded-[28px] overflow-hidden border border-outline-variant shadow-inner shrink-0">
                       <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                     </div>
 
                     {/* Item Details */}
-                    <div className="flex-1 text-center md:text-left">
-                      <h3 className="font-black text-xl text-slate-900 leading-tight">{item.name}</h3>
-                      <p className="text-sm font-bold text-primary mt-1">{item.farm}</p>
-                      <div className="mt-4 flex items-center justify-center md:justify-start gap-4">
-                        <p className="text-lg font-black text-slate-900 tracking-tight">₹{item.price.toLocaleString()}</p>
-                        <span className="text-xs font-bold text-slate-400">per unit</span>
+                    <div className="flex-1 text-center md:text-left w-full">
+                      <h3 className="font-black text-xl text-on-surface leading-tight">{item.name}</h3>
+                      <p className="text-xs font-bold text-primary uppercase tracking-widest mt-1">{item.farm}</p>
+                      
+                      <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xl font-black text-on-surface tracking-tight">₹{item.price.toLocaleString()}</p>
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">/ unit</span>
+                        </div>
+
+                        {/* ✨ INTERACTIVE QUANTITY CONTROLS ✨ */}
+                        <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto">
+                          <div className="flex items-center gap-1 bg-surface-container-lowest p-1.5 rounded-2xl border border-outline-variant shadow-sm">
+                            <button 
+                              onClick={() => updateQuantity(item.id, item.qty - 1)}
+                              className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-on-surface-variant hover:text-primary hover:shadow-md transition-all active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">remove</span>
+                            </button>
+                            <span className="w-10 text-center font-black text-on-surface text-lg">{item.qty}</span>
+                            <button 
+                              onClick={() => updateQuantity(item.id, item.qty + 1)}
+                              className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-on-surface-variant hover:text-primary hover:shadow-md transition-all active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">add</span>
+                            </button>
+                          </div>
+
+                          <button 
+                            onClick={() => removeFromCart(item.id)}
+                            className="p-3 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-xl transition-all"
+                            title="Remove Item"
+                          >
+                            <span className="material-symbols-outlined">delete</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Quantity Controls */}
-                    <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-                      <button 
-                        onClick={() => updateQuantity(item.id, item.qty - 1)}
-                        className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-600 hover:text-primary hover:shadow-md transition-all active:scale-90"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">remove</span>
-                      </button>
-                      <span className="w-12 text-center font-black text-slate-900 text-lg">{item.qty}</span>
-                      <button 
-                        onClick={() => updateQuantity(item.id, item.qty + 1)}
-                        className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-600 hover:text-primary hover:shadow-md transition-all active:scale-90"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                      </button>
-                    </div>
-
-                    {/* Remove Button */}
-                    <button 
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-3 text-slate-300 hover:text-red-500 transition-colors"
-                    >
-                      <span className="material-symbols-outlined">delete</span>
-                    </button>
                   </div>
                 ))}
               </div>
@@ -100,40 +105,43 @@ export default function CartPage() {
 
           {/* RIGHT: CART SUMMARY */}
           <div className="w-full lg:w-5/12">
-            <div className="bg-slate-900 rounded-[40px] p-8 md:p-12 text-white shadow-2xl sticky top-24">
-              <h2 className="text-2xl font-black mb-10 uppercase tracking-[0.2em] text-primary">Summary</h2>
+            <div className="bg-white border border-outline-variant rounded-[48px] p-10 md:p-12 shadow-xl sticky top-24">
+              <h2 className="text-xl font-black mb-8 uppercase tracking-widest text-on-surface border-b border-outline-variant/50 pb-6 flex items-center justify-between">
+                Order Summary
+                <span className="material-symbols-outlined text-on-surface-variant">shopping_bag</span>
+              </h2>
               
-              <div className="space-y-6 mb-10 pb-10 border-b border-white/10">
-                <div className="flex justify-between items-center text-white/60 font-bold">
+              <div className="space-y-5 mb-8">
+                <div className="flex justify-between items-center text-on-surface-variant font-bold">
                   <span>Subtotal</span>
-                  <span className="text-white text-xl font-black">₹{getCartTotal().toLocaleString()}</span>
+                  <span className="text-on-surface font-black">₹{getCartTotal().toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center text-white/60 font-bold">
+                <div className="flex justify-between items-center text-on-surface-variant font-bold">
                   <span>Logistics & Escrow Fee</span>
-                  <span className="text-[#10b981] font-black uppercase tracking-widest text-xs">FREE (0%)</span>
+                  <span className="text-primary font-black uppercase tracking-widest text-[10px] bg-primary/10 px-2 py-1 rounded-md border border-primary/20">FREE (0%)</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-end mb-12">
-                <span className="text-sm font-black uppercase tracking-[0.2em] text-white/40">Estimated Total</span>
-                <span className="text-5xl font-black text-white tracking-tighter">₹{getCartTotal().toLocaleString()}</span>
+              <div className="bg-surface-container-lowest border-2 border-outline-variant rounded-[32px] p-8 mb-8">
+                <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant block mb-1">Estimated Total</span>
+                <span className="text-5xl font-black text-on-surface tracking-tighter">₹{getCartTotal().toLocaleString()}</span>
               </div>
 
               <button 
                 onClick={() => router.push('/checkout')}
-                className="w-full bg-primary text-white py-5 rounded-2xl font-black text-xl hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-primary/30 flex items-center justify-center gap-3 group"
+                className="w-full bg-primary text-white py-6 rounded-3xl font-black text-xl hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-primary/30 flex items-center justify-center gap-3 group"
               >
-                Secure Checkout
+                Proceed to Checkout
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </button>
 
-              <div className="mt-10 pt-10 border-t border-white/5 flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined">verified_user</span>
+              <div className="mt-8 pt-8 border-t border-outline-variant/50 flex items-start gap-4">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                  <span className="material-symbols-outlined text-[20px]">verified_user</span>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1">Guaranteed Safety</p>
-                  <p className="text-xs text-white/80 font-bold italic leading-relaxed">Your payment is only released to the farmer after you verify the quality at delivery.</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-on-surface mb-1">Guaranteed Safety</p>
+                  <p className="text-[11px] text-on-surface-variant font-medium italic leading-relaxed">Your payment is held safely in escrow and only released to the farmer after you verify the quality.</p>
                 </div>
               </div>
             </div>

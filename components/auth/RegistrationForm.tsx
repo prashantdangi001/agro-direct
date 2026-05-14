@@ -1,103 +1,96 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function RegistrationForm() {
   const router = useRouter();
-  // Default to Buyer
-  const [role, setRole] = useState<'farmer' | 'buyer' | 'admin'>('buyer');
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState<'buyer' | 'farmer' | 'admin'>('buyer');
   const [errorMsg, setErrorMsg] = useState('');
-
-  // 🚀 UNIFIED FORM STATE (Includes Mobile and Address)
+  
+  // UNIFIED STATE
   const [formData, setFormData] = useState({
     fullName: '', 
     email: '', 
-    phone: '', // This is the Mobile Number!
+    phone: '', // WhatsApp Mobile
     password: '', 
+    kissanId: '', 
+    aadharId: '', 
     farmName: '', 
     location: '', 
-    kissanId: '', 
-    apaarId: '',
-    deliveryAddress: ''
+    deliveryAddress: '', 
+    adminSecret: ''
   });
+  
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
 
-  const [idDocument, setIdDocument] = useState<File | null>(null);
-  const [idPreview, setIdPreview] = useState<string | null>(null);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setIdDocument(e.target.files[0]);
-      setIdPreview(URL.createObjectURL(e.target.files[0]));
-      setErrorMsg(''); // Clear the error if they upload successfully
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMsg('');
-
-    // 🚀 THE FIX: Manual validation so the browser doesn't freeze silently
-    if (role === 'farmer' && !idDocument) {
-      setErrorMsg("Please upload your Identity Document (Aadhar or KCC).");
-      setLoading(false);
-      return;
+    
+    // Security check for Admin
+    if (role === 'admin' && formData.adminSecret !== 'BGI2026') {
+      return setErrorMsg("SECURITY ERROR: Invalid Admin Access Code.");
     }
+
+    // THE FIX: Manual validation for invisible file input
+    if (role === 'farmer' && !aadhaarFile) {
+      return setErrorMsg("Please upload your Identity Document (Aadhar or KCC).");
+    }
+
+    setLoading(true);
 
     try {
-      // 1. Create Auth User in Supabase (Saves the mobile number in Auth)
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
+      // 1. Create Auth User
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email, 
         password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            phone: formData.phone, // Mobile number saved here!
-            role: role,
-          }
+        options: { 
+          data: { 
+            role: role, 
+            full_name: formData.fullName, 
+            phone: formData.phone 
+          } 
         }
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error("Authentication failed.");
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Registration failed.");
 
-      // 2a. Save FARMER Contact Profile & Document
+      // 2a. Save FARMER Profile
       if (role === 'farmer') {
-        let docUrl = "";
-        if (idDocument) {
-          const fileExt = idDocument.name.split('.').pop();
-          const fileName = `kyc-${data.user.id}-${Date.now()}.${fileExt}`;
-          const { error: uploadError } = await supabase.storage.from('kyc-documents').upload(fileName, idDocument);
+        let kycUrl = '';
+        if (aadhaarFile) {
+          const fileName = `kyc-${authData.user.id}-${Date.now()}.${aadhaarFile.name.split('.').pop()}`;
+          const { error: uploadError } = await supabase.storage.from('kyc-documents').upload(fileName, aadhaarFile);
           if (!uploadError) {
-            const { data: publicUrlData } = supabase.storage.from('kyc-documents').getPublicUrl(fileName);
-            docUrl = publicUrlData.publicUrl;
+            kycUrl = supabase.storage.from('kyc-documents').getPublicUrl(fileName).data.publicUrl;
           }
         }
 
-        const { error: profileError } = await supabase.from('farm_profiles').upsert({
-          id: data.user.id,
-          farm_name: formData.farmName,
-          location: formData.location,
-          full_name: formData.fullName,
-          contact_number: formData.phone, // Saved for WhatsApp Escrow Alerts!
-          kissan_id: formData.kissanId,
-          apaar_id: formData.apaarId,
-          kyc_document_url: docUrl,
+        const { error: dbError } = await supabase.from('farm_profiles').upsert({
+          id: authData.user.id, 
+          full_name: formData.fullName, 
+          farm_name: formData.farmName, 
+          contact_number: formData.phone, 
+          location: formData.location, 
+          kissan_id: formData.kissanId, 
+          apaar_id: formData.aadharId, 
+          kyc_document_url: kycUrl, 
           verification_status: 'pending'
         });
-        if (profileError) throw profileError;
+        if (dbError) throw dbError;
       }
 
-      // 2b. 🚀 Save BUYER Contact Profile
+      // 2b. Save BUYER Profile
       if (role === 'buyer') {
         const { error: buyerError } = await supabase.from('buyer_profiles').upsert({
-          id: data.user.id,
+          id: authData.user.id,
           full_name: formData.fullName,
           email: formData.email,
-          phone: formData.phone, // Buyer mobile number saved here!
+          phone: formData.phone,
           delivery_address: formData.deliveryAddress
         });
         if (buyerError) throw buyerError;
@@ -108,130 +101,221 @@ export default function RegistrationForm() {
       else if (role === 'admin') router.push('/admin');
       else router.push('/marketplace');
 
-    } catch (err: any) {
-      setErrorMsg(err.message || "Registration failed. Ensure your email isn't already used.");
-      setLoading(false);
-    }
+    } catch (error: any) { 
+      setErrorMsg(`Error: ${error.message}`); 
+      setLoading(false); 
+    } 
   };
 
   return (
-    <>
-      {/* ROLE SELECTOR */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {[
-          { id: 'buyer', icon: 'shopping_basket', label: 'Buyer', desc: 'Purchase fresh produce directly.' },
-          { id: 'farmer', icon: 'agriculture', label: 'Farmer', desc: 'List harvest & reach buyers.' },
-          { id: 'admin', icon: 'admin_panel_settings', label: 'Admin', desc: 'Manage the ecosystem.' }
-        ].map((item) => (
-          <div 
-            key={item.id} 
-            onClick={() => setRole(item.id as any)} 
-            className={`group cursor-pointer p-6 rounded-3xl border-2 transition-all active:scale-[0.98] flex flex-col items-center text-center ${
-              role === item.id ? 'bg-primary/5 border-primary shadow-lg shadow-primary/10' : 'bg-white border-outline-variant hover:border-primary/40'
-            }`}
-          >
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
-              role === item.id ? 'bg-primary text-white' : 'bg-surface-container text-on-surface-variant group-hover:text-primary'
-            }`}>
-              <span className="material-symbols-outlined text-3xl">{item.icon}</span>
-            </div>
-            <h3 className="text-lg font-black text-on-surface">{item.label}</h3>
-            <p className="text-[11px] font-bold text-on-surface-variant mt-1">{item.desc}</p>
-          </div>
-        ))}
-      </div>
+    <div className="flex min-h-screen bg-white font-sans">
+      
+      {/* LEFT COLUMN: THE FORM */}
+      <div className="w-full lg:w-1/2 flex flex-col relative min-h-screen py-12 px-8 md:px-16 lg:px-24 justify-center">
+        
+        {/* BACK TRACK OPTION */}
+        <div className="absolute top-8 left-8 md:left-12">
+          <Link href="/" className="flex items-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-colors group px-4 py-2 bg-surface-container-low rounded-full border border-outline-variant shadow-sm hover:shadow-md">
+            <span className="material-symbols-outlined text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
+            Back to Home
+          </Link>
+        </div>
 
-      <div className="bg-white rounded-[40px] p-8 md:p-12 border border-outline-variant shadow-xl">
-        {/* ERROR DISPLAY */}
-        {errorMsg && (
-          <div className="bg-error/10 border border-error/20 text-error p-4 rounded-2xl mb-8 text-sm font-bold flex items-center gap-3 animate-in fade-in">
-            <span className="material-symbols-outlined">error</span> {errorMsg}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-10">
+        <div className="w-full max-w-[480px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700 mt-12">
           
-          {/* CORE CONTACT DETAILS (Always shown) */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-3 border-b border-outline-variant/50 pb-3">
-              <span className="material-symbols-outlined text-primary">person</span>
-              <h2 className="text-xl font-black text-on-surface tracking-tight">Contact Information</h2>
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-on-surface mb-3 tracking-tight">Join Khetify.</h1>
+            <p className="text-on-surface-variant text-base">Create your account to enter the zero-commission ecosystem.</p>
+          </div>
+
+          {errorMsg && (
+            <div className="mb-6 p-4 bg-error/10 border border-error/20 rounded-xl flex items-center gap-3 text-error font-bold text-sm">
+              <span className="material-symbols-outlined">error</span> {errorMsg}
+            </div>
+          )}
+
+          {/* 3-Way Role Selector */}
+          <div className="flex gap-2 p-1.5 bg-surface-container-low rounded-xl mb-8 border border-outline-variant shadow-inner">
+            <button onClick={() => setRole('buyer')} type="button" className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${role === 'buyer' ? 'bg-primary shadow-md text-white scale-[1.02]' : 'text-on-surface-variant hover:text-on-surface hover:bg-black/5'}`}>
+              <span className="material-symbols-outlined text-[18px]">shopping_basket</span> Buyer
+            </button>
+            <button onClick={() => setRole('farmer')} type="button" className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${role === 'farmer' ? 'bg-[#D97706] shadow-md text-white scale-[1.02]' : 'text-on-surface-variant hover:text-on-surface hover:bg-black/5'}`}>
+              <span className="material-symbols-outlined text-[18px]">agriculture</span> Farmer
+            </button>
+            <button onClick={() => setRole('admin')} type="button" className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${role === 'admin' ? 'bg-[#111827] shadow-md text-white scale-[1.02]' : 'text-on-surface-variant hover:text-on-surface hover:bg-black/5'}`}>
+               <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span> Admin
+            </button>
+          </div>
+
+          <form onSubmit={handleRegister} className="space-y-5">
+            
+            {/* CORE DETAILS */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-on-surface">Full Name</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[20px] group-focus-within:text-primary transition-colors">person</span>
+                <input required type="text" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} className="w-full py-3.5 pl-12 pr-4 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-primary focus:bg-white transition-all text-on-surface shadow-sm" placeholder="John Doe" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-on-surface">Email Address</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[20px] group-focus-within:text-primary transition-colors">mail</span>
+                <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full py-3.5 pl-12 pr-4 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-primary focus:bg-white transition-all text-on-surface shadow-sm" placeholder="you@example.com" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-on-surface text-primary">Mobile Number (WhatsApp)</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[20px] group-focus-within:text-primary transition-colors">phone_iphone</span>
+                <input required type="tel" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full py-3.5 pl-12 pr-4 rounded-xl bg-surface border-2 border-primary/50 outline-none focus:border-primary focus:bg-white transition-all text-on-surface shadow-sm" placeholder="91XXXXXXXXXX" />
+              </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Full Name</label>
-                <input required className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="E.g. Prashant Dangi" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Email Address</label>
-                <input required type="email" className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="name@example.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-              </div>
-              
-              {/* 🚀 EXPLICIT MOBILE NUMBER FIELD 🚀 */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest text-primary">Mobile Number (WhatsApp)</label>
-                <input required className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-primary/50 focus:border-primary outline-none transition-all font-bold" placeholder="91XXXXXXXXXX" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-              </div>
-              
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Create Password</label>
-                <input required type="password" minLength={6} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+            <div className="space-y-1.5">
+              <label className="block text-sm font-bold text-on-surface">Password</label>
+              <div className="relative group">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[20px] group-focus-within:text-primary transition-colors">lock</span>
+                <input required type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full py-3.5 pl-12 pr-4 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-primary focus:bg-white transition-all text-on-surface shadow-sm" placeholder="••••••••" />
               </div>
             </div>
-          </section>
 
-          {/* BUYER SPECIFIC DETAILS */}
-          {role === 'buyer' && (
-            <section className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="flex items-center gap-3 border-b border-outline-variant/50 pb-3">
-                <span className="material-symbols-outlined text-primary">local_shipping</span>
-                <h2 className="text-xl font-black text-on-surface tracking-tight">Delivery Details</h2>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Full Shipping Address</label>
-                <textarea required rows={3} className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant focus:border-primary outline-none transition-all font-bold resize-none" placeholder="Enter your full home or business address..." value={formData.deliveryAddress} onChange={e => setFormData({...formData, deliveryAddress: e.target.value})} />
-              </div>
-            </section>
-          )}
-
-          {/* FARMER SPECIFIC DETAILS */}
-          {role === 'farmer' && (
-            <section className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="flex items-center gap-3 border-b border-outline-variant/50 pb-3">
-                <span className="material-symbols-outlined text-primary">badge</span>
-                <h2 className="text-xl font-black text-on-surface tracking-tight">Producer Verification</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <input required placeholder="Farm Name" className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant outline-none focus:border-primary transition-all font-bold" value={formData.farmName} onChange={e => setFormData({...formData, farmName: e.target.value})} />
-                <input required placeholder="Farm Location (City/District)" className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant outline-none focus:border-primary transition-all font-bold" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-                <input required placeholder="Kissan Credit Card ID" className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant outline-none focus:border-primary transition-all font-bold" value={formData.kissanId} onChange={e => setFormData({...formData, kissanId: e.target.value})} />
-                <input placeholder="APAAR ID (Optional)" className="w-full p-4 rounded-2xl bg-surface-container-lowest border-2 border-outline-variant outline-none focus:border-primary transition-all font-bold" value={formData.apaarId} onChange={e => setFormData({...formData, apaarId: e.target.value})} />
-              </div>
-              
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">Upload Identity Document</label>
-                <div className={`relative h-48 w-full border-2 border-dashed rounded-[32px] flex flex-col items-center justify-center bg-surface-container-lowest hover:border-primary hover:bg-primary/5 transition-all group overflow-hidden cursor-pointer ${!idDocument && errorMsg ? 'border-error bg-error/5' : 'border-outline-variant'}`}>
-                  {idPreview ? <img src={idPreview} className="w-full h-full object-cover" /> : (
-                    <div className="text-center p-6">
-                      <span className="material-symbols-outlined text-5xl text-primary/40 mb-3">cloud_upload</span>
-                      <p className="text-sm font-black text-on-surface">Click to upload document</p>
-                      <p className="text-[10px] font-bold text-on-surface-variant mt-1 uppercase tracking-widest">Aadhar or KCC Image</p>
-                    </div>
-                  )}
-                  {/* NO 'required' attribute here to prevent silent crashing */}
-                  <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileChange} />
+            {/* BUYER DETAILS */}
+            {role === 'buyer' && (
+              <div className="border-t-2 border-outline-variant/50 pt-6 mt-8 space-y-5 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-on-surface">Delivery Address</label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-4 text-on-surface-variant material-symbols-outlined text-[20px] group-focus-within:text-primary transition-colors">local_shipping</span>
+                    <textarea required rows={3} value={formData.deliveryAddress} onChange={(e) => setFormData({...formData, deliveryAddress: e.target.value})} className="w-full py-3.5 pl-12 pr-4 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-primary focus:bg-white transition-all text-on-surface shadow-sm resize-none" placeholder="Enter your full home or business address..." />
+                  </div>
                 </div>
               </div>
-            </section>
-          )}
+            )}
 
-          <button type="submit" disabled={loading} className="w-full bg-primary text-white py-5 rounded-3xl font-black text-lg hover:brightness-110 hover:-translate-y-1 active:scale-[0.98] transition-all shadow-2xl shadow-primary/30 disabled:opacity-50 flex items-center justify-center gap-3">
-            {loading ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">how_to_reg</span>}
-            {loading ? 'Processing...' : 'Create Account'}
-          </button>
-        </form>
+            {/* FARMER DETAILS */}
+            {role === 'farmer' && (
+              <div className="border-t-2 border-outline-variant/50 pt-6 mt-8 space-y-5 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-[#D97706]/10 rounded-xl flex items-center justify-center text-[#D97706]"><span className="material-symbols-outlined text-[20px]">storefront</span></div>
+                  <div>
+                    <h3 className="font-bold text-on-surface text-lg leading-tight">Farm & KYC Details</h3>
+                    <p className="text-xs text-on-surface-variant">Required for verified seller status.</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-on-surface-variant">Farm Name</label>
+                  <div className="relative group">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[16px] group-focus-within:text-[#D97706] transition-colors">agriculture</span>
+                    <input required type="text" value={formData.farmName} onChange={(e) => setFormData({...formData, farmName: e.target.value})} className="w-full py-3 pl-9 pr-3 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-[#D97706] focus:bg-white transition-all shadow-sm text-sm" placeholder="Green Valley" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-on-surface-variant">Village / District Location</label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant material-symbols-outlined text-[18px] group-focus-within:text-[#D97706] transition-colors">location_on</span>
+                    <input required type="text" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} className="w-full py-3 pl-11 pr-4 rounded-xl bg-surface border-2 border-outline-variant outline-none focus:border-[#D97706] focus:bg-white transition-all shadow-sm text-sm" placeholder="Sehore, Madhya Pradesh" />
+                  </div>
+                </div>
+
+                <div className="bg-[#fe932c]/5 border-2 border-[#fe932c]/20 rounded-2xl p-6 space-y-5 mt-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-[#904d00]">Kissan ID Number</label>
+                    <div className="relative group">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#904d00]/60 material-symbols-outlined text-[16px]">badge</span>
+                      <input required type="text" value={formData.kissanId} onChange={(e) => setFormData({...formData, kissanId: e.target.value})} className="w-full py-3 pl-9 pr-3 rounded-xl border-2 border-[#fe932c]/30 outline-none focus:border-[#904d00] bg-white text-sm shadow-sm" placeholder="MP-12345" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-[#904d00]">AADHAR NO.</label>
+                    <div className="relative group">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#904d00]/60 material-symbols-outlined text-[16px]">pin</span>
+                      <input required type="text" value={formData.aadharId} onChange={(e) => setFormData({...formData, aadharId: e.target.value})} className="w-full py-3 pl-9 pr-3 rounded-xl border-2 border-[#fe932c]/30 outline-none focus:border-[#904d00] bg-white text-sm shadow-sm" placeholder="12-digit AADHAR" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 pt-2">
+                    <label className="block text-xs font-bold text-[#904d00] mb-2">Upload Identity Scan</label>
+                    {/* NO REQUIRED TAG HERE to fix silent fail */}
+                    <input type="file" accept="image/*" onChange={(e) => setAadhaarFile(e.target.files?.[0] || null)} className="w-full text-sm file:mr-4 file:py-2 file:px-6 file:rounded-full file:border-0 file:font-bold file:bg-[#904d00] file:text-white hover:file:brightness-110 hover:file:-translate-y-0.5 file:transition-all file:shadow-md cursor-pointer text-[#904d00]" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ADMIN SECRET KEY */}
+            {role === 'admin' && (
+              <div className="border-t-2 border-outline-variant/50 pt-6 mt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center text-gray-700"><span className="material-symbols-outlined text-[20px]">admin_panel_settings</span></div>
+                    <div>
+                      <h3 className="font-bold text-gray-800 text-sm leading-tight">Admin Authorization</h3>
+                      <p className="text-xs text-gray-500">System clearance required.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-gray-700">Access Passkey</label>
+                    <div className="relative group">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined text-[16px] group-focus-within:text-gray-800 transition-colors">key</span>
+                      <input required type="password" value={formData.adminSecret} onChange={(e) => setFormData({...formData, adminSecret: e.target.value})} className="w-full py-3 pl-9 pr-3 rounded-xl border-2 border-gray-300 outline-none focus:border-gray-800 bg-white text-sm shadow-sm transition-all" placeholder="Enter secure code..." />
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-medium mt-1 ml-1">Hint: BGI2026</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button disabled={loading} type="submit" className={`w-full py-4 text-white rounded-xl font-bold shadow-lg hover:-translate-y-1 transition-all mt-8 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-2 text-lg group ${role === 'admin' ? 'bg-[#111827] shadow-[#111827]/30 hover:shadow-[#111827]/50' : role === 'farmer' ? 'bg-[#D97706] shadow-[#D97706]/30 hover:shadow-[#D97706]/50' : 'bg-primary shadow-primary/30 hover:shadow-primary/50'}`}>
+              {loading ? (
+                <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Processing...</>
+              ) : (
+                <>Create Account <span className="material-symbols-outlined text-[20px] group-hover:translate-x-1 transition-transform">arrow_forward</span></>
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-sm text-on-surface-variant mt-10 font-medium">
+            Already have an account? <Link href="/login" className="text-primary font-bold hover:underline ml-1">Sign in here</Link>
+          </p>
+        </div>
       </div>
-    </>
+
+      {/* RIGHT COLUMN: THE VISUAL BANNER */}
+      <div className="hidden lg:block lg:w-1/2 fixed right-0 top-0 bottom-0 bg-surface-container-high">
+        <img 
+          src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=1600&auto=format&fit=crop" 
+          alt="Golden wheat field at sunset" 
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
+
+        <div className="absolute bottom-12 left-12 right-12 text-white animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#D97706]/80 backdrop-blur-md rounded-full border border-white/20 mb-4 shadow-xl">
+            <span className="material-symbols-outlined text-white text-[18px]">workspace_premium</span>
+            <span className="text-xs font-bold tracking-wider uppercase text-white">Zero Commission Guarantee</span>
+          </div>
+          <h2 className="text-4xl font-bold mb-4 leading-tight">Scale your farm.<br/>Direct to consumer.</h2>
+          <p className="text-lg text-white/80 max-w-md">
+            Join thousands of modern agriculturists utilizing Khetify's isolated storefronts and real-time escrow infrastructure.
+          </p>
+
+          <div className="grid grid-cols-2 gap-6 mt-8 pt-8 border-t border-white/20">
+            <div>
+              <p className="text-3xl font-bold text-white mb-1">100%</p>
+              <p className="text-xs font-medium text-white/70 uppercase tracking-wider">Payment Isolation</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-white mb-1">Real-time</p>
+              <p className="text-xs font-medium text-white/70 uppercase tracking-wider">Market Analytics</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   );
 }
